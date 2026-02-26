@@ -24,3 +24,43 @@ Configured entirely through emacs config like a proper emacs package.
 - No markdown support, org-mode only
 - No JavaScript build pipeline
 - No external dependencies outside of emacs packages
+
+
+Design:
+```elisp
+(grimoire-setup
+  :source "~/blog/content/"
+  :output "~/blog/public/"
+  :templates "~/blog/templates/")
+```
+
+And each org file declares its own type:
+
+```org
+#+TITLE: My Post
+#+DATE: 2024-01-15
+#+TYPE: post
+#+TAGS: emacs lisp
+```
+
+Then grimoire sees `#+TYPE: post`, looks for `post.html` in your templates dir, renders into it. A `#+TYPE: page` gets `page.html`. Simple.
+
+**What this means for the architecture:**
+
+1. Scan all `.org` files in source dir recursively
+2. Extract metadata (type, title, date, tags) via `org-element`
+3. Group by type — posts get listings/pagination/feeds, pages just get rendered
+4. Render each file, inject into its type's template
+5. Generate index/tag pages for types that need them (probably configurable per-type)
+
+Per-type config could be:
+
+```elisp
+(grimoire-define-type "post"
+  :listing t
+  :pagination t  
+  :feed t)
+
+(grimoire-define-type "page"
+  :listing nil)
+```

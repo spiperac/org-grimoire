@@ -1,0 +1,6 @@
+#+TITLE: Hello World
+#+DATE: 2024-01-15
+#+TYPE: post
+#+TAGS: emacs lisp
+
+This is my first post.
