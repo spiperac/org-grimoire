@@ -1,0 +1,26 @@
+* org-grimoire — An Emacs-native Static Site Generator
+
+A static site generator written in Emacs Lisp, designed to replace
+the current ox-publish based blog setup. It should feel native to
+emacs and org-mode while solving the limitations of ox-publish.
+Configured entirely through emacs config like a proper emacs package.
+
+** Core features
+
+- HTML templates system — define layouts as HTML files with
+  placeholders, no hardcoded HTML in elisp config
+- Proper post listing — scan org files, parse metadata (title, date,
+  tags), build index pages properly instead of sitemap hacks
+- Pagination — configurable posts per page, generates page-1.html,
+  page-2.html etc
+- Tag support — collect tags from org files, generate per-tag listing
+  pages
+- RSS/Atom feed generation — single feed or per-section feeds
+- User-defined sections — user defines their own sections in emacs
+  config, each with their own templates and listing pages
+
+** Non-goals
+
+- No markdown support, org-mode only
+- No JavaScript build pipeline
+- No external dependencies outside of emacs packages
