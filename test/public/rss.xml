@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+<channel>
+  <title>My Blog</title>
+  <link>https://yoursite.com</link>
+  <description>A blog about emacs and stuff</description>
+  <lastBuildDate>Thu, 26 Feb 2026 06:15:45 +0000</lastBuildDate>
+  <item>
+    <title>esp8266 (OLED) and RFID-RC522</title>
+    <link>https://yoursite.com/posts/esp8266-rfid.html</link>
+    <guid>https://yoursite.com/posts/esp8266-rfid.html</guid>
+    <pubDate>Wed, 18 Feb 2026 00:00:00 +0000</pubDate>
+    <category>electronics</category>
+  </item>
+  <item>
+    <title>Hello World</title>
+    <link>https://yoursite.com/posts/hello.html</link>
+    <guid>https://yoursite.com/posts/hello.html</guid>
+    <pubDate>Mon, 15 Jan 2024 00:00:00 +0000</pubDate>
+    <category>emacs</category>
+    <category>lisp</category>
+  </item>
+  <item>
+    <title>Hello World</title>
+    <link>https://yoursite.com/posts/hello2.html</link>
+    <guid>https://yoursite.com/posts/hello2.html</guid>
+    <pubDate>Mon, 15 Jan 2024 00:00:00 +0000</pubDate>
+    <category>emacs</category>
+    <category>lisp</category>
+  </item>
+  <item>
+    <title>Hello World</title>
+    <link>https://yoursite.com/posts/hello3.html</link>
+    <guid>https://yoursite.com/posts/hello3.html</guid>
+    <pubDate>Mon, 15 Jan 2024 00:00:00 +0000</pubDate>
+    <category>emacs</category>
+    <category>lisp</category>
+  </item>
+  <item>
+    <title>Hello World</title>
+    <link>https://yoursite.com/posts/hello4.html</link>
+    <guid>https://yoursite.com/posts/hello4.html</guid>
+    <pubDate>Mon, 15 Jan 2024 00:00:00 +0000</pubDate>
+    <category>emacs</category>
+    <category>lisp</category>
+  </item>
+  <item>
+    <title>Hello World</title>
+    <link>https://yoursite.com/posts/hello5.html</link>
+    <guid>https://yoursite.com/posts/hello5.html</guid>
+    <pubDate>Mon, 15 Jan 2024 00:00:00 +0000</pubDate>
+    <category>emacs</category>
+    <category>lisp</category>
+  </item>
+</channel>
+</rss>

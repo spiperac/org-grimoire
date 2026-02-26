@@ -90,25 +90,26 @@ Returns list of pages, each page is a list of posts."
 
 (defun grimoire-generate-index (all-posts type template-dir output-dir
                                            &optional title per-page)
-  "Generate index pages for posts of TYPE.
-ALL-POSTS is the full list, TYPE filters which posts to list.
-TITLE defaults to type name, PER-PAGE defaults to 10."
-  (let* ((title    (or title (capitalize type)))
-         (per-page (or per-page 10))
-         (posts    (grimoire--sort-posts-by-date
-                    (cl-remove-if-not
-                     (lambda (p) (string= (plist-get p :type) type))
-                     all-posts)))
-         (template (grimoire--load-template template-dir "index"))
-         (pages    (grimoire--paginate posts per-page))
-         (total    (length pages)))
-    (if (null posts)
-        (message "No posts of type '%s' found." type)
-      (cl-loop for page-posts in pages
-               for i from 1
-               do (grimoire--write-index-page
-                   page-posts i total template
-                   output-dir type title per-page)))))
+  "Generate index pages for posts of TYPE."
+  (condition-case err
+      (let* ((title    (or title (capitalize type)))
+             (per-page (or per-page 10))
+             (posts    (grimoire--sort-posts-by-date
+                        (cl-remove-if-not
+                         (lambda (p) (string= (plist-get p :type) type))
+                         all-posts)))
+             (template (grimoire--load-template template-dir "index"))
+             (pages    (grimoire--paginate posts per-page))
+             (total    (length pages)))
+        (if (null posts)
+            (message "WARNING: No posts of type '%s' found." type)
+          (cl-loop for page-posts in pages
+                   for i from 1
+                   do (grimoire--write-index-page
+                       page-posts i total template
+                       output-dir type title per-page))))
+    (error (message "WARNING: Failed to generate index for type '%s': %s"
+                    type (error-message-string err)))))
 
 (provide 'org-grimoire-index)
 ;;; org-grimoire-index.el ends here

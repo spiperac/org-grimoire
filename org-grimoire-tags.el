@@ -73,12 +73,18 @@
 
 (defun grimoire-generate-tags (posts templates-dir output-dir)
   "Generate all tag pages and tags index from POSTS."
-  (let ((tags (grimoire--collect-tags posts)))
-    (maphash (lambda (tag tag-posts)
-               (grimoire--write-tag-page tag tag-posts templates-dir output-dir))
-             tags)
-    (grimoire--write-tags-index tags templates-dir output-dir)
-    (message "Generated %d tag pages." (hash-table-count tags))))
+  (condition-case err
+      (let ((tags (grimoire--collect-tags posts)))
+        (maphash (lambda (tag tag-posts)
+                   (condition-case err
+                       (grimoire--write-tag-page tag tag-posts templates-dir output-dir)
+                     (error (message "WARNING: Failed to render tag page '%s': %s"
+                                     tag (error-message-string err)))))
+                 tags)
+        (grimoire--write-tags-index tags templates-dir output-dir)
+        (message "Generated %d tag pages." (hash-table-count tags)))
+    (error (message "WARNING: Failed to generate tags: %s"
+                    (error-message-string err)))))
 
 (provide 'org-grimoire-tags)
 ;;; org-grimoire-tags.el ends here

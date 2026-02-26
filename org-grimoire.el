@@ -16,6 +16,7 @@
 (require 'org-grimoire-render)
 (require 'org-grimoire-index)
 (require 'org-grimoire-tags)
+(require 'org-grimoire-feed)
 
 ;; --- State ---
 
@@ -51,24 +52,34 @@ Keys: :listing :pagination :per-page :feed"
 (defun grimoire-build ()
   "Build the site."
   (interactive)
-  (let ((source    (plist-get grimoire--config :source))
-        (output    (plist-get grimoire--config :output))
-        (templates (plist-get grimoire--config :templates))
-        (static    (plist-get grimoire--config :static)))
-    (message "Collecting posts from %s..." source)
-    (let ((posts (grimoire-collect source output)))
-      (message "Found %d posts, rendering..." (length posts))
-      (setq grimoire--current-templates-dir templates)
-      (grimoire--copy-static static (expand-file-name "static" output))
-      (grimoire-render posts templates)
-      (maphash (lambda (type config)
-                 (when (plist-get config :listing)
-                   (grimoire-generate-index posts type templates output
-                                           nil
-                                           (or (plist-get config :per-page) 10))))
-               grimoire--types)
-      (grimoire-generate-tags posts templates output)
-      (message "Build complete."))))
+  (let ((source      (plist-get grimoire--config :source))
+        (output      (plist-get grimoire--config :output))
+        (templates   (plist-get grimoire--config :templates))
+        (static      (plist-get grimoire--config :static))
+        (base-url    (plist-get grimoire--config :base-url))
+        (title       (plist-get grimoire--config :title))
+        (description (plist-get grimoire--config :description)))
+    (message "=== org-grimoire build started ===")
+    (message "Source:    %s" source)
+    (message "Output:    %s" output)
+    (message "Templates: %s" templates)
+    (condition-case err
+        (let ((posts (grimoire-collect source output)))
+          (message "Collected %d posts." (length posts))
+          (setq grimoire--current-templates-dir templates)
+          (grimoire--copy-static static (expand-file-name "static" output))
+          (grimoire-render posts templates)
+          (maphash (lambda (type config)
+                     (when (plist-get config :listing)
+                       (grimoire-generate-index posts type templates output
+                                               nil
+                                               (or (plist-get config :per-page) 10))))
+                   grimoire--types)
+          (grimoire-generate-tags posts templates output)
+          (grimoire-generate-feeds posts output base-url title description)
+          (message "=== org-grimoire build complete ==="))
+      (error (message "ERROR: Build failed: %s"
+                      (error-message-string err))))))
 
 (provide 'org-grimoire)
 ;;; org-grimoire.el ends here

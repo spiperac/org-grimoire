@@ -68,7 +68,11 @@
 (defun grimoire-render (posts templates-dir)
   "Render all POSTS to their output paths using TEMPLATES-DIR."
   (dolist (post posts)
-    (grimoire--write-post post templates-dir)))
+    (condition-case err
+        (grimoire--write-post post templates-dir)
+      (error (message "WARNING: Failed to render %s: %s"
+                      (plist-get post :source)
+                      (error-message-string err))))))
 
 (provide 'org-grimoire-render)
 ;;; org-grimoire-render.el ends here

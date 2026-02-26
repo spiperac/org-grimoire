@@ -16,9 +16,9 @@
   <h1>esp8266 (OLED) and RFID-RC522</h1>
   <time>2026-02-18</time>
   <div class="tags">electronics</div>
-  <div class="body"><div id="outline-container-org1d37279" class="outline-2">
-<h2 id="org1d37279">Board Wiring</h2>
-<div class="outline-text-2" id="text-org1d37279">
+  <div class="body"><div id="outline-container-org092c436" class="outline-2">
+<h2 id="org092c436">Board Wiring</h2>
+<div class="outline-text-2" id="text-org092c436">
 <p>
 Use following wiring if you have ESP8266 with 0.96 OLED screen from IdeaSpark. 
 I got mine for cheap on AliExpress<sup><a id="fnr.1" class="footref" href="#fn.1" role="doc-backlink">1</a></sup>.
@@ -82,15 +82,15 @@ This is the board i got:
 </p>
 
 
-<div id="org86af5e0" class="figure">
+<div id="org3f619c5" class="figure">
 <p><img src="images/RC522_to_Ideaspark_ESP8266_OLED_Board_Wiring/2026-02-18_17-09-14_screenshot.png" alt="2026-02-18_17-09-14_screenshot.png" />
 </p>
 </div>
 </div>
 </div>
-<div id="outline-container-org2af4516" class="outline-2">
-<h2 id="org2af4516">Code defines</h2>
-<div class="outline-text-2" id="text-org2af4516">
+<div id="outline-container-org122446c" class="outline-2">
+<h2 id="org122446c">Code defines</h2>
+<div class="outline-text-2" id="text-org122446c">
 <p>
 It's a bit different than wireing standard 8266, because it has OLED screen, which takes pins D5 and D6 for itself,
 and there's no other alternatives but to reuse them and disable OLED.
@@ -104,9 +104,9 @@ This scheme and bunch of other useful info could be found at manualplus<sup><a i
 </div>
 </div>
 </div>
-<div id="outline-container-org7d245a5" class="outline-2">
-<h2 id="org7d245a5">Simple code to test reading</h2>
-<div class="outline-text-2" id="text-org7d245a5">
+<div id="outline-container-orgba8927f" class="outline-2">
+<h2 id="orgba8927f">Simple code to test reading</h2>
+<div class="outline-text-2" id="text-orgba8927f">
 <div class="org-src-container">
 <pre class="src src-cpp"><span class="org-preprocessor">#include</span> <span class="org-string"><span class="org-rainbow-delimiters-depth-1">&lt;</span></span><span class="org-string">SPI.h</span><span class="org-string"><span class="org-rainbow-delimiters-depth-1">&gt;</span></span>
 <span class="org-preprocessor">#include</span> <span class="org-string"><span class="org-rainbow-delimiters-depth-1">&lt;</span></span><span class="org-string">MFRC522.h</span><span class="org-string"><span class="org-rainbow-delimiters-depth-1">&gt;</span></span>

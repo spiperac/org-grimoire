@@ -1,66 +1,209 @@
+#+OPTIONS: toc:nil
 * org-grimoire — An Emacs-native Static Site Generator
+#+ATTR_HTML: :width 128px
+[[file:docs/logo.png]]
 
-A static site generator written in Emacs Lisp, designed to replace
-the current ox-publish based blog setup. It should feel native to
-emacs and org-mode while solving the limitations of ox-publish.
-Configured entirely through emacs config like a proper emacs package.
+An Emacs-native static site generator. Write your content in org-mode,
+configure everything in your Emacs config, build with a single command.
 
-** Core features
+No external dependencies. No markdown. No JavaScript build pipeline.
+Just Emacs, org-mode, and HTML templates.
 
-- HTML templates system — define layouts as HTML files with
-  placeholders, no hardcoded HTML in elisp config
-- Proper post listing — scan org files, parse metadata (title, date,
-  tags), build index pages properly instead of sitemap hacks
-- Pagination — configurable posts per page, generates page-1.html,
-  page-2.html etc
-- Tag support — collect tags from org files, generate per-tag listing
-  pages
-- RSS/Atom feed generation — single feed or per-section feeds
-- User-defined sections — user defines their own sections in emacs
-  config, each with their own templates and listing pages
+** Installation
+
+Clone the repository and add it to your load path:
+
+#+begin_src elisp
+(add-to-list 'load-path "~/path/to/org-grimoire/")
+(require 'org-grimoire)
+#+end_src
+
+** Configuration
+
+Add to your Emacs config:
+
+#+begin_src elisp
+(grimoire-setup
+  :source      "~/blog/content/"
+  :output      "~/blog/public/"
+  :templates   "~/blog/templates/"
+  :static      "~/blog/static/"
+  :base-url    "https://yoursite.com"
+  :title       "My Blog"
+  :description "A blog about things")
+
+(grimoire-define-type "post"
+  :listing  t
+  :pagination t
+  :per-page 10
+  :feed     t)
+
+(grimoire-define-type "page"
+  :listing nil)
+#+end_src
+
+** Directory structure
+
+#+begin_src
+blog/
+├── content/          # your org files
+│   ├── posts/
+│   │   ├── my-post.org
+│   │   └── images/
+│   │       └── screenshot.png
+│   └── about.org
+├── templates/        # HTML templates
+│   ├── base.html
+│   ├── post.html
+│   ├── page.html
+│   ├── index.html
+│   ├── tags.html
+│   ├── navbar.html
+│   └── footer.html
+├── static/           # copied as-is to output/static/
+│   └── css/
+│       └── style.css
+└── public/           # generated output
+#+end_src
+
+** Writing content
+
+Each org file declares its own type via =#+TYPE:=:
+
+#+begin_src org
+,#+TITLE: My Post
+,#+DATE: 2024-01-15
+,#+TYPE: post
+,#+TAGS: emacs lisp
+
+Post content goes here. Full org-mode syntax supported.
+#+end_src
+
+*** Frontmatter keywords
+
+| Keyword    | Description                              | Example                  |
+|------------+------------------------------------------+--------------------------|
+| =#+TITLE=  | Page title                               | =#+TITLE: My Post=       |
+| =#+DATE=   | Publication date (yyyy-mm-dd)            | =#+DATE: 2024-01-15=     |
+| =#+TYPE=   | Content type, maps to a template         | =#+TYPE: post=           |
+| =#+TAGS=   | Space or comma separated list of tags    | =#+TAGS: emacs lisp=     |
+| =#+DRAFT=  | Set to =t= to exclude from build         | =#+DRAFT: t=             |
+
+*** Images and file links
+
+org-grimoire automatically detects =file:= links in your org files
+and copies referenced files to the output directory, preserving
+relative paths. This means org-download works out of the box:
+
+#+begin_src org
+[[file:images/screenshot.png]]
+#+end_src
+
+Gets copied from =content/posts/images/screenshot.png= to
+=public/posts/images/screenshot.png= and the relative link works
+in the browser with no extra configuration.
+
+** Templates
+
+*** Base template
+
+=base.html= is the site-wide layout. All pages are wrapped in it.
+It receives ={{title}}= and ={{content}}= placeholders:
+
+#+begin_src html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>{{title}}</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  {{include navbar.html}}
+  {{content}}
+  {{include footer.html}}
+</body>
+</html>
+#+end_src
+
+*** Type templates
+
+Each content type maps to its own template file. =#+TYPE: post= uses
+=post.html=, =#+TYPE: page= uses =page.html= and so on.
+
+=post.html=:
+#+begin_src html
+<article>
+  <h1>{{title}}</h1>
+  <time>{{date}}</time>
+  <div class="tags">{{tags}}</div>
+  <div class="content">{{content}}</div>
+</article>
+#+end_src
+
+Available placeholders in type templates:
+
+| Placeholder    | Description                     |
+|----------------+---------------------------------|
+| ={{title}}=    | Post title                      |
+| ={{content}}=  | Rendered HTML content           |
+| ={{date}}=     | Publication date                |
+| ={{tags}}=     | Comma separated list of tags    |
+| ={{slug}}=     | URL slug derived from filename  |
+
+*** Index template
+
+Used for post listing pages and tag pages. =index.html=:
+
+#+begin_src html
+<h1>{{title}}</h1>
+<ul>{{posts}}</ul>
+{{pagination}}
+#+end_src
+
+| Placeholder      | Description                        |
+|------------------+------------------------------------|
+| ={{title}}=      | Page title                         |
+| ={{posts}}=      | Generated list of post links       |
+| ={{pagination}}= | Previous/next page navigation      |
+
+*** Tags template
+
+=tags.html= is used for the tags index page at =/tags/index.html=:
+
+#+begin_src html
+<h1>{{title}}</h1>
+<ul>{{tags}}</ul>
+#+end_src
+
+*** Includes
+
+Any template can include another template file using ={{include}}=:
+
+#+begin_src html
+{{include navbar.html}}
+{{include footer.html}}
+#+end_src
+
+Files are resolved relative to your templates directory.
+
+** Building
+
+Run =M-x grimoire-build= to build the site. Output goes to your
+configured =:output= directory.
+
+Build log is written to the =*Messages*= buffer. Errors in individual
+files are logged as warnings and the build continues.
+
+** Feeds
+
+RSS and Atom feeds are automatically generated at =/rss.xml= and
+=/atom.xml= for all content types with =:feed t= in their type
+definition.
 
 ** Non-goals
 
 - No markdown support, org-mode only
 - No JavaScript build pipeline
-- No external dependencies outside of emacs packages
-
-
-Design:
-```elisp
-(grimoire-setup
-  :source "~/blog/content/"
-  :output "~/blog/public/"
-  :templates "~/blog/templates/")
-```
-
-And each org file declares its own type:
-
-```org
-#+TITLE: My Post
-#+DATE: 2024-01-15
-#+TYPE: post
-#+TAGS: emacs lisp
-```
-
-Then grimoire sees `#+TYPE: post`, looks for `post.html` in your templates dir, renders into it. A `#+TYPE: page` gets `page.html`. Simple.
-
-**What this means for the architecture:**
-
-1. Scan all `.org` files in source dir recursively
-2. Extract metadata (type, title, date, tags) via `org-element`
-3. Group by type — posts get listings/pagination/feeds, pages just get rendered
-4. Render each file, inject into its type's template
-5. Generate index/tag pages for types that need them (probably configurable per-type)
-
-Per-type config could be:
-
-```elisp
-(grimoire-define-type "post"
-  :listing t
-  :pagination t  
-  :feed t)
-
-(grimoire-define-type "page"
-  :listing nil)
-```
+- No external dependencies outside of Emacs packages
+- No built-in development server (use Python's =http.server= or similar)
