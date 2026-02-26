@@ -10,6 +10,18 @@ No external dependencies. No markdown. No JavaScript build pipeline.
 Just Emacs, org-mode, and HTML templates.
 
 ** Installation
+#+OPTIONS: toc:nil
+* org-grimoire — An Emacs-native Static Site Generator
+#+ATTR_HTML: :width 128px
+[[file:docs/logo.png]]
+
+An Emacs-native static site generator. Write your content in org-mode,
+configure everything in your Emacs config, build with a single command.
+
+No external dependencies. No markdown. No JavaScript build pipeline.
+Just Emacs, org-mode, and HTML templates.
+
+** Installation
 
 Clone the repository and add it to your load path:
 
@@ -23,23 +35,46 @@ Clone the repository and add it to your load path:
 Add to your Emacs config:
 
 #+begin_src elisp
-(grimoire-setup
-  :source      "~/blog/content/"
-  :output      "~/blog/public/"
-  :templates   "~/blog/templates/"
-  :static      "~/blog/static/"
+(grimoire-setup "my-blog"
+  :base-dir    "~/blog"
   :base-url    "https://yoursite.com"
   :title       "My Blog"
-  :description "A blog about things")
+  :description "A blog about things"
+  :theme       "mytheme"
+  :per-page    10)
+#+end_src
 
-(grimoire-define-type "post"
-  :listing  t
-  :pagination t
-  :per-page 10
-  :feed     t)
+org-grimoire derives all paths from =:base-dir= automatically:
 
-(grimoire-define-type "page"
-  :listing nil)
+| Key          | Derived path                  |
+|--------------+-------------------------------|
+| =:source=    | =base-dir/content/=           |
+| =:output=    | =base-dir/public_html/=       |
+| =:static=    | =base-dir/static/=            |
+| =:theme=     | =base-dir/themes/mytheme/=    |
+
+You can override any of these individually by passing =:source=,
+=:output=, =:static=, or a full path to =:theme= explicitly.
+
+*** Multiple sites
+
+You can configure and build multiple sites independently:
+
+#+begin_src elisp
+(grimoire-setup "blog"
+  :base-dir "~/blog"
+  :base-url "https://blog.com"
+  :title    "My Blog"
+  :theme    "minimal")
+
+(grimoire-setup "company"
+  :base-dir "~/company-site"
+  :base-url "https://company.com"
+  :title    "My Company"
+  :theme    "corporate")
+
+(grimoire-build "blog")
+(grimoire-build "company")
 #+end_src
 
 ** Directory structure
@@ -52,18 +87,24 @@ blog/
 │   │   └── images/
 │   │       └── screenshot.png
 │   └── about.org
-├── templates/        # HTML templates
-│   ├── base.html
-│   ├── post.html
-│   ├── page.html
-│   ├── index.html
-│   ├── tags.html
-│   ├── navbar.html
-│   └── footer.html
-├── static/           # copied as-is to output/static/
+├── themes/
+│   └── mytheme/      # HTML templates
+│       ├── base.html
+│       ├── post.html
+│       ├── page.html
+│       ├── index.html
+│       ├── tags.html
+│       ├── static/   # theme static files (css, fonts, etc.)
+│       └── partials/
+│           ├── navbar.html
+│           ├── footer.html
+│           ├── post-item.html
+│           ├── tag-item.html
+│           └── pagination.html
+├── static/           # your static files, copied as-is to output/static/
 │   └── css/
 │       └── style.css
-└── public/           # generated output
+└── public_html/           # generated output
 #+end_src
 
 ** Writing content
@@ -81,13 +122,21 @@ Post content goes here. Full org-mode syntax supported.
 
 *** Frontmatter keywords
 
-| Keyword    | Description                              | Example                  |
-|------------+------------------------------------------+--------------------------|
-| =#+TITLE=  | Page title                               | =#+TITLE: My Post=       |
-| =#+DATE=   | Publication date (yyyy-mm-dd)            | =#+DATE: 2024-01-15=     |
-| =#+TYPE=   | Content type, maps to a template         | =#+TYPE: post=           |
-| =#+TAGS=   | Space or comma separated list of tags    | =#+TAGS: emacs lisp=     |
-| =#+DRAFT=  | Set to =t= to exclude from build         | =#+DRAFT: t=             |
+| Keyword      | Description                           | Example                  |
+|--------------+---------------------------------------+--------------------------|
+| =#+TITLE=    | Page title                            | =#+TITLE: My Post=       |
+| =#+DATE=     | Publication date (yyyy-mm-dd)         | =#+DATE: 2024-01-15=     |
+| =#+TYPE=     | Content type, maps to a template      | =#+TYPE: post=           |
+| =#+TAGS=     | Space or comma separated list of tags | =#+TAGS: emacs lisp=     |
+| =#+DRAFT=    | Set to =t= to exclude from build      | =#+DRAFT: t=             |
+| =#+LISTED=   | Set to =nil= to hide from index       | =#+LISTED: nil=          |
+
+*** Draft vs Listed
+
+- =#+DRAFT: t= — post is not built at all, completely excluded
+- =#+LISTED: nil= — post is built and accessible via its URL and tag
+  pages, but does not appear on the main index listing. Defaults to
+  =t= if omitted.
 
 *** Images and file links
 
@@ -100,7 +149,7 @@ relative paths. This means org-download works out of the box:
 #+end_src
 
 Gets copied from =content/posts/images/screenshot.png= to
-=public/posts/images/screenshot.png= and the relative link works
+=public_html/posts/images/screenshot.png= and the relative link works
 in the browser with no extra configuration.
 
 ** Templates
@@ -119,9 +168,9 @@ It receives ={{title}}= and ={{content}}= placeholders:
   <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
-  {{include navbar.html}}
+  {{include partials/navbar.html}}
   {{content}}
-  {{include footer.html}}
+  {{include partials/footer.html}}
 </body>
 </html>
 #+end_src
@@ -153,7 +202,7 @@ Available placeholders in type templates:
 
 *** Index template
 
-Used for post listing pages and tag pages. =index.html=:
+Used for the post listing and tag pages. =index.html=:
 
 #+begin_src html
 <h1>{{title}}</h1>
@@ -161,11 +210,11 @@ Used for post listing pages and tag pages. =index.html=:
 {{pagination}}
 #+end_src
 
-| Placeholder      | Description                        |
-|------------------+------------------------------------|
-| ={{title}}=      | Page title                         |
-| ={{posts}}=      | Generated list of post links       |
-| ={{pagination}}= | Previous/next page navigation      |
+| Placeholder      | Description                      |
+|------------------+----------------------------------|
+| ={{title}}=      | Page title                       |
+| ={{posts}}=      | Generated list of post links     |
+| ={{pagination}}= | Previous/next page navigation    |
 
 *** Tags template
 
@@ -178,28 +227,32 @@ Used for post listing pages and tag pages. =index.html=:
 
 *** Includes
 
-Any template can include another template file using ={{include}}=:
+Any template can include another file using ={{include}}=:
 
 #+begin_src html
-{{include navbar.html}}
-{{include footer.html}}
+{{include partials/navbar.html}}
+{{include partials/footer.html}}
 #+end_src
 
-Files are resolved relative to your templates directory.
+Files are resolved relative to your theme directory.
 
 ** Building
 
-Run =M-x grimoire-build= to build the site. Output goes to your
-configured =:output= directory.
+Run =M-x grimoire-build= and enter the site name when prompted, or
+call it directly from your config:
 
-Build log is written to the =*Messages*= buffer. Errors in individual
-files are logged as warnings and the build continues.
+#+begin_src elisp
+(grimoire-build "my-blog")
+#+end_src
+
+Output goes to =base-dir/public_html/=. Build log is written to the
+=*Messages*= buffer. Errors in individual files are logged as warnings
+and the build continues.
 
 ** Feeds
 
 RSS and Atom feeds are automatically generated at =/rss.xml= and
-=/atom.xml= for all content types with =:feed t= in their type
-definition.
+=/atom.xml= from all published posts.
 
 ** Non-goals
 

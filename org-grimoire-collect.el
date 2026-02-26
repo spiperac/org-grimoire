@@ -4,7 +4,6 @@
 ;; Scans source directory for .org files and extracts metadata.
 
 ;;; Code:
-
 (require 'org)
 (require 'org-element)
 
@@ -18,6 +17,7 @@
 ;;  :source "/path/to/file.org"
 ;;  :output "/path/to/output/my-post.html"
 ;;  :assets ("/path/to/images/screenshot.png" ...))
+
 
 (defun grimoire--extract-keyword (ast keyword)
   "Extract value of KEYWORD from org AST."
@@ -60,6 +60,8 @@ SOURCE-DIR and OUTPUT-DIR used to compute output path."
            (date   (grimoire--extract-keyword ast "DATE"))
            (type   (grimoire--extract-keyword ast "TYPE"))
            (draft  (grimoire--extract-keyword ast "DRAFT"))
+           (listed (let ((v (grimoire--extract-keyword ast "LISTED")))
+                     (not (equal v "nil"))))
            (tags   (grimoire--parse-tags
                     (grimoire--extract-keyword ast "TAGS")))
            (slug   (grimoire--file-to-slug filepath))
@@ -68,24 +70,39 @@ SOURCE-DIR and OUTPUT-DIR used to compute output path."
                     (concat (file-name-sans-extension relative) ".html")
                     output-dir))
            (assets (grimoire--collect-assets ast filepath)))
+      (unless type
+        (message "WARNING: No #+TYPE in %s" filepath))
       (list :title  title
             :date   date
             :type   type
             :draft  draft
+            :listed listed
             :tags   tags
             :slug   slug
             :source filepath
             :output output
             :assets assets))))
 
+(defun grimoire--copy-static (static-dir output-dir)
+  "Copy all files from STATIC-DIR to OUTPUT-DIR recursively."
+  (when (and static-dir (file-exists-p static-dir))
+    (let ((files (directory-files-recursively static-dir ".*")))
+      (dolist (file files)
+        (let* ((relative (file-relative-name file static-dir))
+               (dest     (expand-file-name relative output-dir)))
+          (make-directory (file-name-directory dest) t)
+          (copy-file file dest t)
+          (message "Copied: %s" dest))))))
+
 (defun grimoire-collect (source-dir output-dir)
   "Scan SOURCE-DIR recursively, return list of post plists.
-Skips files with #+DRAFT: t."
+Skips files with #+DRAFT: t or missing #+TYPE:."
   (let ((org-files (directory-files-recursively source-dir "\\.org$")))
     (delq nil
           (mapcar (lambda (f)
                     (let ((post (grimoire--collect-file f source-dir output-dir)))
-                      (unless (equal (plist-get post :draft) "t")
+                      (unless (or (equal (plist-get post :draft) "t")
+                                  (null (plist-get post :type)))
                         post)))
                   org-files))))
 

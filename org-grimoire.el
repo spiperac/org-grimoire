@@ -12,70 +12,74 @@
 
 ;;; Code:
 
+;; --- State ---
+
+(defvar grimoire--sites nil
+  "Hash table of named site configurations.")
+(unless grimoire--sites
+  (setq grimoire--sites (make-hash-table :test 'equal)))
+
+;; --- Requires ---
+
 (require 'org-grimoire-collect)
 (require 'org-grimoire-render)
 (require 'org-grimoire-index)
 (require 'org-grimoire-tags)
 (require 'org-grimoire-feed)
 
-;; --- State ---
-
-(defvar grimoire--types (make-hash-table :test 'equal)
-  "Hash table of defined content types.")
-
-(defvar grimoire--config nil
-  "Global grimoire configuration plist.")
-
 ;; --- Public API ---
 
-(defun grimoire-setup (&rest args)
-  "Configure grimoire with ARGS.
-Keys: :source :output :templates"
-  (setq grimoire--config args))
+(defun grimoire--resolve-config (args)
+  "Derive :source :output :static :theme from :base-dir unless explicitly set."
+  (let ((base  (plist-get args :base-dir))
+        (theme (plist-get args :theme)))
+    (if (not base)
+        args
+      (let ((base (expand-file-name base)))
+        (append
+         (list
+          :source (or (plist-get args :source)
+                      (expand-file-name "content" base))
+          :output (or (plist-get args :output)
+                      (expand-file-name "public_html" base))
+          :static (or (plist-get args :static)
+                      (expand-file-name "static" base))
+          :theme  (or (and theme
+                           (expand-file-name theme
+                                             (expand-file-name "themes" base)))
+                      (plist-get args :theme)))
+         args)))))
 
-(defun grimoire-define-type (name &rest args)
-  "Define a content type NAME with ARGS.
-Keys: :listing :pagination :per-page :feed"
-  (puthash name args grimoire--types))
+(defun grimoire-setup (name &rest args)
+  "Register a site configuration NAME with ARGS.
+Keys: :base-dir :base-url :title :description :theme :per-page
+Optional overrides: :source :output :static"
+  (puthash name (grimoire--resolve-config args) grimoire--sites))
 
-(defun grimoire--copy-static (static-dir output-dir)
-  "Copy all files from STATIC-DIR to OUTPUT-DIR recursively."
-  (when (and static-dir (file-exists-p static-dir))
-    (let ((files (directory-files-recursively static-dir ".*")))
-      (dolist (file files)
-        (let* ((relative (file-relative-name file static-dir))
-               (dest     (expand-file-name relative output-dir)))
-          (make-directory (file-name-directory dest) t)
-          (copy-file file dest t)
-          (message "Copied: %s" dest))))))
-
-(defun grimoire-build ()
-  "Build the site."
-  (interactive)
-  (let ((source      (plist-get grimoire--config :source))
-        (output      (plist-get grimoire--config :output))
-        (templates   (plist-get grimoire--config :templates))
-        (static      (plist-get grimoire--config :static))
-        (base-url    (plist-get grimoire--config :base-url))
-        (title       (plist-get grimoire--config :title))
-        (description (plist-get grimoire--config :description)))
+(defun grimoire-build (name)
+  "Build the site registered as NAME."
+  (interactive "sSite name: ")
+  (let* ((config      (or (gethash name grimoire--sites)
+                          (error "No site configured with name: %s" name)))
+         (source      (plist-get config :source))
+         (output      (plist-get config :output))
+         (static      (plist-get config :static))
+         (theme-dir   (plist-get config :theme))
+         (base-url    (plist-get config :base-url))
+         (title       (plist-get config :title))
+         (description (plist-get config :description))
+         (per-page    (or (plist-get config :per-page) 10)))
     (message "=== org-grimoire build started ===")
-    (message "Source:    %s" source)
-    (message "Output:    %s" output)
-    (message "Templates: %s" templates)
+    (message "Source: %s" source)
+    (message "Output: %s" output)
     (condition-case err
         (let ((posts (grimoire-collect source output)))
           (message "Collected %d posts." (length posts))
-          (setq grimoire--current-templates-dir templates)
           (grimoire--copy-static static (expand-file-name "static" output))
-          (grimoire-render posts templates)
-          (maphash (lambda (type config)
-                     (when (plist-get config :listing)
-                       (grimoire-generate-index posts type templates output
-                                               nil
-                                               (or (plist-get config :per-page) 10))))
-                   grimoire--types)
-          (grimoire-generate-tags posts templates output)
+          (grimoire--copy-theme-static output theme-dir)
+          (grimoire-render posts theme-dir)
+          (grimoire-generate-index posts output per-page theme-dir title)
+          (grimoire-generate-tags posts output theme-dir)
           (grimoire-generate-feeds posts output base-url title description)
           (message "=== org-grimoire build complete ==="))
       (error (message "ERROR: Build failed: %s"
@@ -83,4 +87,3 @@ Keys: :listing :pagination :per-page :feed"
 
 (provide 'org-grimoire)
 ;;; org-grimoire.el ends here
-

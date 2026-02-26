@@ -6,45 +6,43 @@
 ;;; Code:
 
 (require 'org-grimoire-collect)
+(require 'org-grimoire-template)
 
 ;; --- Sorting ---
 
 (defun grimoire--sort-posts-by-date (posts)
   "Sort POSTS by date, newest first."
-  (sort posts
+  (sort (copy-sequence posts)
         (lambda (a b)
           (string> (or (plist-get a :date) "")
                    (or (plist-get b :date) "")))))
 
-;; --- Post list HTML ---
+;; --- Post list rendering ---
 
-(defun grimoire--post-to-list-item (post output-dir)
-  "Render a single POST as an HTML list item."
+(defun grimoire--render-post-item (post output-dir theme-dir)
+  "Render a single POST as HTML using post-item partial."
   (let* ((title  (or (plist-get post :title) "Untitled"))
          (date   (or (plist-get post :date) ""))
          (tags   (plist-get post :tags))
          (output (plist-get post :output))
          (url    (concat "/" (file-relative-name output output-dir))))
-    (format "<li><a href=\"%s\">%s</a> <time>%s</time>%s</li>"
-            url
-            title
-            date
-            (if tags
-                (format " <span class=\"tags\">%s</span>"
-                        (string-join tags ", "))
-              ""))))
+    (grimoire--render-template
+     (grimoire--load-template "partials/post-item" theme-dir)
+     (list :title title
+           :url   url
+           :date  date
+           :tags  (if tags (string-join tags ", ") ""))
+     theme-dir)))
 
-(defun grimoire--render-post-list (posts output-dir)
+(defun grimoire--render-post-list (posts output-dir theme-dir)
   "Render all POSTS as HTML list items string."
-  (mapconcat (lambda (p) (grimoire--post-to-list-item p output-dir))
-             posts
-             "\n"))
+  (mapconcat (lambda (p) (grimoire--render-post-item p output-dir theme-dir))
+             posts "\n"))
 
 ;; --- Pagination ---
 
 (defun grimoire--paginate (posts per-page)
-  "Split POSTS into pages of PER-PAGE posts each.
-Returns list of pages, each page is a list of posts."
+  "Split POSTS into pages of PER-PAGE posts each."
   (let (pages current)
     (dolist (post posts)
       (push post current)
@@ -55,61 +53,63 @@ Returns list of pages, each page is a list of posts."
       (push (nreverse current) pages))
     (nreverse pages)))
 
-(defun grimoire--pagination-html (current-page total-pages output-dir type)
+(defun grimoire--pagination-html (current-page total-pages theme-dir)
   "Generate pagination HTML for CURRENT-PAGE of TOTAL-PAGES."
-  (let ((prev-url (when (> current-page 1)
-                    (if (= current-page 2)
-                        "/index.html"
-                      (format "/page-%d.html" (1- current-page)))))
-        (next-url (when (< current-page total-pages)
-                    (format "/page-%d.html" (1+ current-page)))))
-    (concat
-     "<nav class=\"pagination\">"
-     (if prev-url (format "<a href=\"%s\">&larr; Newer</a> " prev-url) "")
-     (if next-url (format "<a href=\"%s\">Older &rarr;</a>" next-url) "")
-     "</nav>")))
+  (let* ((prev-url  (when (> current-page 1)
+                      (if (= current-page 2)
+                          "/index.html"
+                        (format "/page-%d.html" (1- current-page)))))
+         (next-url  (when (< current-page total-pages)
+                      (format "/page-%d.html" (1+ current-page))))
+         (template  (grimoire--load-template "partials/pagination" theme-dir))
+         (prev-html (if prev-url
+                        (format "<a href=\"%s\">&larr; Newer</a>" prev-url)
+                      ""))
+         (next-html (if next-url
+                        (format "<a href=\"%s\">Older &rarr;</a>" next-url)
+                      "")))
+    (grimoire--render-template template
+      (list :prev prev-html
+            :next next-html)
+      theme-dir)))
 
 ;; --- Index generation ---
 
-(defun grimoire--write-index-page (posts page-num total-pages template
-                                         output-dir type title per-page)
+(defun grimoire--write-index-page (posts page-num total-pages
+                                         output-dir title theme-dir)
   "Write a single index page PAGE-NUM to OUTPUT-DIR."
   (let* ((filename (if (= page-num 1) "index.html"
                      (format "page-%d.html" page-num)))
          (output   (expand-file-name filename output-dir))
+         (template (grimoire--load-template "index" theme-dir))
          (inner    (grimoire--render-template template
                      (list :title      title
-                           :posts      (grimoire--render-post-list posts output-dir)
-                           :pagination (grimoire--pagination-html
-                                        page-num total-pages output-dir type))
-                     grimoire--current-templates-dir))
-         (html     (grimoire--wrap-base inner title grimoire--current-templates-dir)))
+                           :posts      (grimoire--render-post-list posts output-dir theme-dir)
+                           :pagination (grimoire--pagination-html page-num total-pages theme-dir))
+                     theme-dir))
+         (html     (grimoire--wrap-base inner title theme-dir)))
     (make-directory output-dir t)
     (write-region html nil output)
     (message "Rendered index: %s" output)))
 
-(defun grimoire-generate-index (all-posts type template-dir output-dir
-                                           &optional title per-page)
-  "Generate index pages for posts of TYPE."
+(defun grimoire-generate-index (all-posts output-dir per-page theme-dir &optional title)
+  "Generate index pages for all listed posts."
   (condition-case err
-      (let* ((title    (or title (capitalize type)))
-             (per-page (or per-page 10))
-             (posts    (grimoire--sort-posts-by-date
-                        (cl-remove-if-not
-                         (lambda (p) (string= (plist-get p :type) type))
-                         all-posts)))
-             (template (grimoire--load-template template-dir "index"))
-             (pages    (grimoire--paginate posts per-page))
-             (total    (length pages)))
+      (let* ((title  (or title "Posts"))
+             (posts  (grimoire--sort-posts-by-date
+                      (cl-remove-if-not
+                       (lambda (p) (plist-get p :listed))
+                       all-posts)))
+             (pages  (grimoire--paginate posts per-page))
+             (total  (length pages)))
         (if (null posts)
-            (message "WARNING: No posts of type '%s' found." type)
+            (message "WARNING: No listed posts found.")
           (cl-loop for page-posts in pages
                    for i from 1
                    do (grimoire--write-index-page
-                       page-posts i total template
-                       output-dir type title per-page))))
-    (error (message "WARNING: Failed to generate index for type '%s': %s"
-                    type (error-message-string err)))))
+                       page-posts i total output-dir title theme-dir))))
+    (error (message "WARNING: Failed to generate index: %s"
+                    (error-message-string err)))))
 
 (provide 'org-grimoire-index)
 ;;; org-grimoire-index.el ends here

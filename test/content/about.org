@@ -1,4 +1,0 @@
-#+TITLE: About 
-#+TYPE: page
-
-This is my about page

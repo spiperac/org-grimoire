@@ -6,6 +6,7 @@
 ;;; Code:
 
 (require 'org-grimoire-collect)
+(require 'org-grimoire-index)
 
 ;; --- Helpers ---
 
@@ -61,22 +62,21 @@
      "  </item>\n")))
 
 (defun grimoire--generate-rss (posts base-url output-dir site-title site-description)
-  "Generate RSS 2.0 feed XML string from POSTS."
-  (let ((sorted (grimoire--sort-posts-by-date posts)))
-    (concat
-     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-     "<rss version=\"2.0\">\n"
-     "<channel>\n"
-     (format "  <title>%s</title>\n" (grimoire--escape-xml site-title))
-     (format "  <link>%s</link>\n" base-url)
-     (format "  <description>%s</description>\n"
-             (grimoire--escape-xml site-description))
-     (format "  <lastBuildDate>%s</lastBuildDate>\n"
-             (format-time-string "%a, %d %b %Y %H:%M:%S +0000"))
-     (mapconcat (lambda (p) (grimoire--rss-item p base-url output-dir))
-                sorted "")
-     "</channel>\n"
-     "</rss>\n")))
+  "Generate RSS 2.0 feed XML string from POSTS (pre-sorted)."
+  (concat
+   "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+   "<rss version=\"2.0\">\n"
+   "<channel>\n"
+   (format "  <title>%s</title>\n" (grimoire--escape-xml site-title))
+   (format "  <link>%s</link>\n" base-url)
+   (format "  <description>%s</description>\n"
+           (grimoire--escape-xml site-description))
+   (format "  <lastBuildDate>%s</lastBuildDate>\n"
+           (format-time-string "%a, %d %b %Y %H:%M:%S +0000"))
+   (mapconcat (lambda (p) (grimoire--rss-item p base-url output-dir))
+              posts "")
+   "</channel>\n"
+   "</rss>\n"))
 
 ;; --- Atom ---
 
@@ -94,35 +94,27 @@
      "  </entry>\n")))
 
 (defun grimoire--generate-atom (posts base-url output-dir site-title)
-  "Generate Atom feed XML string from POSTS."
-  (let ((sorted (grimoire--sort-posts-by-date posts)))
-    (concat
-     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-     "<feed xmlns=\"http://www.w3.org/2005/Atom\">\n"
-     (format "  <title>%s</title>\n" (grimoire--escape-xml site-title))
-     (format "  <link href=\"%s\"/>\n" base-url)
-     (format "  <id>%s</id>\n" base-url)
-     (format "  <updated>%s</updated>\n"
-             (format-time-string "%Y-%m-%dT%H:%M:%SZ"))
-     (mapconcat (lambda (p) (grimoire--atom-entry p base-url output-dir))
-                sorted "")
-     "</feed>\n")))
+  "Generate Atom feed XML string from POSTS (pre-sorted)."
+  (concat
+   "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+   "<feed xmlns=\"http://www.w3.org/2005/Atom\">\n"
+   (format "  <title>%s</title>\n" (grimoire--escape-xml site-title))
+   (format "  <link href=\"%s\"/>\n" base-url)
+   (format "  <id>%s</id>\n" base-url)
+   (format "  <updated>%s</updated>\n"
+           (format-time-string "%Y-%m-%dT%H:%M:%SZ"))
+   (mapconcat (lambda (p) (grimoire--atom-entry p base-url output-dir))
+              posts "")
+   "</feed>\n"))
 
 ;; --- Public API ---
 
 (defun grimoire-generate-feeds (posts output-dir base-url site-title site-description)
   "Generate RSS and Atom feeds from POSTS to OUTPUT-DIR."
   (condition-case err
-      (let* ((feed-posts (grimoire--sort-posts-by-date
-                          (cl-remove-if-not
-                           (lambda (p)
-                             (let ((type (plist-get p :type)))
-                               (when type
-                                 (let ((config (gethash type grimoire--types)))
-                                   (plist-get config :feed)))))
-                           posts)))
-             (rss-path  (expand-file-name "rss.xml" output-dir))
-             (atom-path (expand-file-name "atom.xml" output-dir)))
+      (let* ((feed-posts (grimoire--sort-posts-by-date posts))
+             (rss-path   (expand-file-name "rss.xml" output-dir))
+             (atom-path  (expand-file-name "atom.xml" output-dir)))
         (write-region
          (grimoire--generate-rss feed-posts base-url output-dir site-title site-description)
          nil rss-path)

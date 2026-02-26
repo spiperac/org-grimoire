@@ -25,11 +25,11 @@
 
 ;; --- Main render ---
 
-(defun grimoire--render-post (post templates-dir)
-  "Render a single POST plist to HTML string."
+(defun grimoire--render-post (post theme-dir)
+  "Render a single POST plist to HTML string using THEME-DIR."
   (let* ((type     (or (plist-get post :type) "page"))
          (title    (or (plist-get post :title) ""))
-         (template (grimoire--load-template templates-dir type))
+         (template (grimoire--load-template type theme-dir))
          (content  (grimoire--org-to-html (plist-get post :source)))
          (date     (or (plist-get post :date) ""))
          (tags     (plist-get post :tags))
@@ -39,11 +39,11 @@
                            :date    date
                            :tags    (if tags (string-join tags ", ") "")
                            :slug    (plist-get post :slug))
-                     templates-dir)))
-    (grimoire--wrap-base inner title templates-dir)))
+                     theme-dir)))
+    (grimoire--wrap-base inner title theme-dir)))
 
 (defun grimoire--copy-assets (assets source-file output-file)
-  "Copy ASSETS to output dir, mirroring structure relative to SOURCE-FILE."
+  "Copy ASSETS to output dir mirroring structure relative to SOURCE-FILE."
   (let ((source-dir (file-name-directory source-file))
         (output-dir (file-name-directory output-file)))
     (dolist (asset assets)
@@ -53,11 +53,11 @@
         (copy-file asset dest t)
         (message "Copied asset: %s" dest)))))
 
-(defun grimoire--write-post (post templates-dir)
-  "Render POST and write to its output path."
+(defun grimoire--write-post (post theme-dir)
+  "Render POST and write to its output path using THEME-DIR."
   (let* ((output (plist-get post :output))
          (dir    (file-name-directory output))
-         (html   (grimoire--render-post post templates-dir))
+         (html   (grimoire--render-post post theme-dir))
          (assets (plist-get post :assets)))
     (make-directory dir t)
     (write-region html nil output)
@@ -65,11 +65,11 @@
       (grimoire--copy-assets assets (plist-get post :source) output))
     (message "Rendered: %s" output)))
 
-(defun grimoire-render (posts templates-dir)
-  "Render all POSTS to their output paths using TEMPLATES-DIR."
+(defun grimoire-render (posts theme-dir)
+  "Render all POSTS to their output paths using THEME-DIR."
   (dolist (post posts)
     (condition-case err
-        (grimoire--write-post post templates-dir)
+        (grimoire--write-post post theme-dir)
       (error (message "WARNING: Failed to render %s: %s"
                       (plist-get post :source)
                       (error-message-string err))))))
