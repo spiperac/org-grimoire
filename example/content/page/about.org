@@ -1,0 +1,8 @@
+#+TITLE: about
+#+DATE: 2026-02-27
+#+TAGS: 
+#+DRAFT: nil
+#+LISTED: nil
+
+this is about
+

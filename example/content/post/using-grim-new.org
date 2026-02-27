@@ -1,0 +1,10 @@
+#+TITLE: using grim new
+#+DATE: 2026-02-27
+#+TYPE: post
+#+TAGS: elisp
+
+
+** org-grimoire-new
+
+Made by using integrated utility
+

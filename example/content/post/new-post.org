@@ -1,0 +1,8 @@
+#+TITLE: new post
+#+DATE: 2026-02-27
+#+TYPE: post
+#+TAGS: cpp,c++,prog
+#+DRAFT: false
+
+
+C++ is awesome

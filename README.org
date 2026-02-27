@@ -23,10 +23,10 @@ Clone the repository and add it to your load path:
 Add to your Emacs config:
 
 #+begin_src elisp
-(grimoire-setup "my-blog"
+(org-grimoire-setup "my-blog"
   :base-dir    "~/blog"
   :base-url    "https://yoursite.com"
-  :title       "My Blog"
+  :site-title  "My Blog"
   :description "A blog about things"
   :theme       "mytheme"
   :per-page    10)
@@ -34,75 +34,92 @@ Add to your Emacs config:
 
 org-grimoire derives all paths from =:base-dir= automatically:
 
-| Key          | Derived path                  |
-|--------------+-------------------------------|
-| =:source=    | =base-dir/content/=           |
-| =:output=    | =base-dir/public_html/=       |
-| =:static=    | =base-dir/static/=            |
-| =:theme=     | =base-dir/themes/mytheme/=    |
+| Key       | Derived path               |
+|-----------+----------------------------|
+| =:source= | =base-dir/content/=        |
+| =:output= | =base-dir/public_html/=    |
+| =:static= | =base-dir/static/=         |
+| =:theme=  | =base-dir/themes/mytheme/= |
 
 You can override any of these individually by passing =:source=,
 =:output=, =:static=, or a full path to =:theme= explicitly.
+
+All available setup keys:
+
+| Key            | Required | Description                                        |
+|----------------+----------+----------------------------------------------------|
+| =:base-dir=    | yes      | Root directory of your site                        |
+| =:base-url=    | yes      | Full URL including scheme (e.g. https://example.com) |
+| =:site-title=  | yes      | Global site name, used in feeds and navigation     |
+| =:description= | no       | Site description, used in feeds and meta tags      |
+| =:author=      | no       | Author name, used in Atom feed                     |
+| =:theme=       | no       | Theme name under =base-dir/themes/=                |
+| =:per-page=    | no       | Posts per index page, defaults to 10               |
+| =:reading-time=| no       | Set to =t= to enable reading time estimates        |
 
 *** Multiple sites
 
 You can configure and build multiple sites independently:
 
 #+begin_src elisp
-(grimoire-setup "blog"
-  :base-dir "~/blog"
-  :base-url "https://blog.com"
-  :title    "My Blog"
-  :theme    "minimal")
+(org-grimoire-setup "blog"
+  :base-dir   "~/blog"
+  :base-url   "https://blog.com"
+  :site-title "My Blog"
+  :theme      "minimal")
 
-(grimoire-setup "company"
-  :base-dir "~/company-site"
-  :base-url "https://company.com"
-  :title    "My Company"
-  :theme    "corporate")
+(org-grimoire-setup "company"
+  :base-dir   "~/company-site"
+  :base-url   "https://company.com"
+  :site-title "My Company"
+  :theme      "corporate")
 
-(grimoire-build "blog")
-(grimoire-build "company")
+(org-grimoire-build "blog")
+(org-grimoire-build "company")
 #+end_src
 
 ** Directory structure
 
 #+begin_src
 blog/
-├── content/          # your org files
-│   ├── posts/
+├── content/             # your org files
+│   ├── post/            # content type inferred from directory name
 │   │   ├── my-post.org
 │   │   └── images/
 │   │       └── screenshot.png
-│   └── about.org
+│   └── page/
+│       └── about.org
 ├── themes/
-│   └── mytheme/      # HTML templates
+│   └── mytheme/         # HTML templates
 │       ├── base.html
 │       ├── post.html
 │       ├── page.html
 │       ├── index.html
 │       ├── tags.html
-│       ├── static/   # theme static files (css, fonts, etc.)
+│       ├── static/      # theme static files (css, fonts, etc.)
 │       └── partials/
 │           ├── navbar.html
 │           ├── footer.html
 │           ├── post-item.html
 │           ├── tag-item.html
+│           ├── tag-index.html
 │           └── pagination.html
-├── static/           # your static files, copied as-is to output/static/
+├── static/              # your static files, copied as-is to output/static/
 │   └── css/
 │       └── style.css
-└── public_html/           # generated output
+└── public_html/         # generated output
 #+end_src
 
 ** Writing content
 
-Each org file declares its own type via =#+TYPE:=:
+The content type is inferred from the directory the file lives in.
+A file in =content/post/= is of type =post= and uses =post.html= template.
+A file in =content/page/= is of type =page= and uses =page.html=, and so on.
+You can create any number of content types by adding subdirectories.
 
 #+begin_src org
 ,#+TITLE: My Post
 ,#+DATE: 2024-01-15
-,#+TYPE: post
 ,#+TAGS: emacs lisp
 
 Post content goes here. Full org-mode syntax supported.
@@ -110,14 +127,13 @@ Post content goes here. Full org-mode syntax supported.
 
 *** Frontmatter keywords
 
-| Keyword      | Description                           | Example                  |
-|--------------+---------------------------------------+--------------------------|
-| =#+TITLE=    | Page title                            | =#+TITLE: My Post=       |
-| =#+DATE=     | Publication date (yyyy-mm-dd)         | =#+DATE: 2024-01-15=     |
-| =#+TYPE=     | Content type, maps to a template      | =#+TYPE: post=           |
-| =#+TAGS=     | Space or comma separated list of tags | =#+TAGS: emacs lisp=     |
-| =#+DRAFT=    | Set to =t= to exclude from build      | =#+DRAFT: t=             |
-| =#+LISTED=   | Set to =nil= to hide from index       | =#+LISTED: nil=          |
+| Keyword    | Description                           | Example              |
+|------------+---------------------------------------+----------------------|
+| =#+TITLE=  | Page title                            | =#+TITLE: My Post=   |
+| =#+DATE=   | Publication date (yyyy-mm-dd)         | =#+DATE: 2024-01-15= |
+| =#+TAGS=   | Space or comma separated list of tags | =#+TAGS: emacs lisp= |
+| =#+DRAFT=  | Set to =t= to exclude from build      | =#+DRAFT: t=         |
+| =#+LISTED= | Set to =nil= to hide from index       | =#+LISTED: nil=      |
 
 *** Draft vs Listed
 
@@ -136,8 +152,8 @@ relative paths. This means org-download works out of the box:
 [[file:images/screenshot.png]]
 #+end_src
 
-Gets copied from =content/posts/images/screenshot.png= to
-=public_html/posts/images/screenshot.png= and the relative link works
+Gets copied from =content/post/images/screenshot.png= to
+=public_html/post/images/screenshot.png= and the relative link works
 in the browser with no extra configuration.
 
 ** Templates
@@ -145,7 +161,6 @@ in the browser with no extra configuration.
 *** Base template
 
 =base.html= is the site-wide layout. All pages are wrapped in it.
-It receives ={{title}}= and ={{content}}= placeholders:
 
 #+begin_src html
 <!DOCTYPE html>
@@ -163,55 +178,87 @@ It receives ={{title}}= and ={{content}}= placeholders:
 </html>
 #+end_src
 
+Available placeholders in =base.html=:
+
+| Placeholder      | Description                              |
+|------------------+------------------------------------------|
+| ={{title}}=      | Current page title                       |
+| ={{site-title}}= | Global site title from =:site-title=     |
+| ={{description}}=| Site description from =:description=     |
+| ={{author}}=     | Author from =:author=                    |
+| ={{base-url}}=   | Base URL from =:base-url=                |
+| ={{url}}=        | Root-relative URL of the current page    |
+| ={{content}}=    | Rendered page content                    |
+
 *** Type templates
 
-Each content type maps to its own template file. =#+TYPE: post= uses
-=post.html=, =#+TYPE: page= uses =page.html= and so on.
+Each content type maps to its own template file. A file in =content/post/=
+uses =post.html=, a file in =content/page/= uses =page.html=, and so on.
 
 =post.html=:
 #+begin_src html
 <article>
   <h1>{{title}}</h1>
   <time>{{date}}</time>
-  <div class="tags">{{tags}}</div>
+  {{tags}}
+  <span>{{reading-time}}</span>
   <div class="content">{{content}}</div>
 </article>
 #+end_src
 
 Available placeholders in type templates:
 
-| Placeholder    | Description                     |
-|----------------+---------------------------------|
-| ={{title}}=    | Post title                      |
-| ={{content}}=  | Rendered HTML content           |
-| ={{date}}=     | Publication date                |
-| ={{tags}}=     | Comma separated list of tags    |
-| ={{slug}}=     | URL slug derived from filename  |
+| Placeholder      | Description                              |
+|------------------+------------------------------------------|
+| ={{title}}=      | Post title                               |
+| ={{content}}=    | Rendered HTML content                    |
+| ={{date}}=       | Publication date                         |
+| ={{tags}}=       | Rendered tag links (grimoire-tags div)   |
+| ={{slug}}=       | URL slug derived from filename           |
+| ={{reading-time}}= | Estimated reading time (e.g. "3 min read"), requires =:reading-time t= in setup |
 
 *** Index template
 
-Used for the post listing and tag pages. =index.html=:
+=index.html= is used for the paginated post listing at the site root.
 
 #+begin_src html
-<h1>{{title}}</h1>
+<h1>{{site-title}}</h1>
+<p>{{description}}</p>
 <ul>{{posts}}</ul>
 {{pagination}}
 #+end_src
 
-| Placeholder      | Description                      |
-|------------------+----------------------------------|
-| ={{title}}=      | Page title                       |
-| ={{posts}}=      | Generated list of post links     |
-| ={{pagination}}= | Previous/next page navigation    |
+| Placeholder      | Description                   |
+|------------------+-------------------------------|
+| ={{site-title}}= | Global site title             |
+| ={{description}}=| Site description              |
+| ={{posts}}=      | Generated list of post items  |
+| ={{pagination}}= | Previous/next page navigation |
 
-*** Tags template
+*** Tags templates
 
-=tags.html= is used for the tags index page at =/tags/index.html=:
+=tags.html= is the tags index at =/tags/index.html=, listing all tags:
 
 #+begin_src html
 <h1>{{title}}</h1>
 <ul>{{tags}}</ul>
 #+end_src
+
+=partials/tag-index.html= is used for individual tag listing pages at
+=/tags/tag-name.html=:
+
+#+begin_src html
+<h1>{{title}}</h1>
+<ul>{{posts}}</ul>
+#+end_src
+
+=partials/tag-item.html= renders a single tag in the tags index:
+
+| Placeholder  | Description              |
+|--------------+--------------------------|
+| ={{name}}=   | Tag name                 |
+| ={{slug}}=   | URL-safe tag slug        |
+| ={{count}}=  | Number of posts with tag |
 
 *** Includes
 
@@ -222,29 +269,58 @@ Any template can include another file using ={{include}}=:
 {{include partials/footer.html}}
 #+end_src
 
-Files are resolved relative to your theme directory.
+Files are resolved relative to your theme directory, with fallback to
+the built-in default theme.
 
-** Building
+** Commands
 
-Run =M-x grimoire-build= and enter the site name when prompted, or
-call it directly from your config:
+| Command              | Description                                      |
+|----------------------+--------------------------------------------------|
+| =org-grimoire-init=  | Initialize a new site with boilerplate structure |
+| =org-grimoire-setup= | Register a site configuration                    |
+| =org-grimoire-build= | Build the site                                   |
+| =org-grimoire-new=   | Create a new post interactively                  |
+| =org-grimoire-serve= | Serve the site locally (requires =simple-httpd=) |
+
+*** Building
+
+Run =M-x org-grimoire-build= and enter the site name when prompted, or
+call it directly:
 
 #+begin_src elisp
-(grimoire-build "my-blog")
+(org-grimoire-build "my-blog")
 #+end_src
 
 Output goes to =base-dir/public_html/=. Build log is written to the
 =*Messages*= buffer. Errors in individual files are logged as warnings
-and the build continues.
+and the build continues, with a summary printed at the end.
+
+*** Starting a new site
+
+Run =M-x org-grimoire-init= to create a new site with a boilerplate
+directory structure, sample post and page, and a config snippet to add
+to your Emacs config.
+
+*** Creating new content
+
+Run =M-x org-grimoire-new= and enter the site name. You will be prompted
+to pick a content type from existing directories, then enter a title and
+tags. The file is created and opened automatically as a draft.
+
+*** Local preview
+
+If you have =simple-httpd= installed, run =M-x org-grimoire-serve= to
+serve your built site at =http://localhost:8080=. =simple-httpd= is not
+a required dependency.
 
 ** Feeds
 
 RSS and Atom feeds are automatically generated at =/rss.xml= and
 =/atom.xml= from all published posts.
 
-** Non-goals
+A sitemap is generated at =/sitemap.xml=.
 
-- No markdown support, org-mode only
-- No JavaScript build pipeline
-- No external dependencies outside of Emacs packages
-- No built-in development server (use Python's =http.server= or similar)
+** License
+
+org-grimoire is free software, released under the GNU General Public
+License version 3 or later. See the =LICENSE= file for details.
