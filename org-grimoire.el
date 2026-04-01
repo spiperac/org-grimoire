@@ -6,7 +6,7 @@
 ;; Version: 0.1.0
 ;; Package-Requires: ((emacs "30.2") (org "9.7.11"))
 ;; Keywords: files, hypermedia, outlines, text
-;; URL: https://github.com/you/org-grimoire
+;; URL: https://github.com/spiperac/org-grimoire
 
 ;; License: GPL-3.0-or-later
 

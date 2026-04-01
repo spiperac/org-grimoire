@@ -1,9 +1,0 @@
-#+TITLE: math
-#+DATE: 2026-02-27
-#+TYPE: page
-#+TAGS: 
-#+LISTED: nil
-#+DRAFT: false
-
-
-Its a daily dugg

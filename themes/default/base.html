@@ -2,15 +2,39 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta theme="default">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{title}}</title>
+  <meta name="description" content="{{description}}">
+  <meta name="author" content="{{author}}">
+  <title>{{title}} &mdash; {{site-title}}</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="alternate" type="application/rss+xml" title="{{site-title}}" href="{{base-url}}/rss.xml">
+  <link rel="canonical" href="{{base-url}}{{url}}">
 </head>
 <body>
+  {{include partials/navbar.html}}
   <main>
     {{content}}
   </main>
   {{include partials/footer.html}}
+<script>
+  document.querySelectorAll('.org-src-container').forEach(block => {
+    const btn = document.createElement('button');
+    btn.className = 'copy-btn';
+    btn.textContent = 'copy';
+    block.appendChild(btn);
+    btn.addEventListener('click', () => {
+      const code = block.querySelector('pre').innerText;
+      navigator.clipboard.writeText(code).then(() => {
+        btn.textContent = 'copied';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.textContent = 'copy';
+          btn.classList.remove('copied');
+        }, 2000);
+      });
+    });
+  });
+</script>
+
 </body>
 </html>
-
