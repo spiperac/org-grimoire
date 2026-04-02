@@ -1,13 +1,14 @@
 #+OPTIONS: toc:nil
 * org-grimoire — An Emacs-native Static Site Generator
+[[https://github.com/spiperac/org-grimoire/actions/workflows/melpazoid.yml][https://github.com/spiperac/org-grimoire/actions/workflows/melpazoid.yml/badge.svg]]
+
 #+ATTR_HTML: :width 128px
 [[file:docs/logo.png]]
 
-An Emacs-native static site generator. Write your content in org-mode,
+An Emacs static site generator. Write your content in org-mode,
 configure everything in your Emacs config, build with a single command.
 
-No external dependencies.
-Just Emacs, org-mode, and HTML templates.
+Just Emacs, org-mode, and HTML templates!
 
 ** Installation
 
