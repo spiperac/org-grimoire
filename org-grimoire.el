@@ -57,9 +57,11 @@
 (require 'org-element)
 (require 'ox-html)
 
-;;; ---------------------------------------------------------------------------
-;;; Internal State
-;;; ---------------------------------------------------------------------------
+(declare-function httpd-start "simple-httpd")
+(defvar httpd-root)
+(defvar httpd-port)
+
+;;; Internal State:
 
 (defvar org-grimoire--sites (make-hash-table :test 'equal)
   "Hash table of named site configurations.")
@@ -79,9 +81,7 @@ Bound dynamically by `org-grimoire-build'; do not set this directly.")
   "Return the value of KEY from the current site configuration."
   (plist-get (gethash org-grimoire--current-site org-grimoire--sites) key))
 
-;;; ---------------------------------------------------------------------------
-;;; Build Logger
-;;; ---------------------------------------------------------------------------
+;;; Build Logger:
 
 (defvar org-grimoire--log nil
   "Accumulated log entries for the current build.
@@ -118,9 +118,7 @@ LEVEL must be :info, :warn, or :error."
       (message "  %d warning(s), %d error(s)."
                (length warnings) (length errors)))))
 
-;;; ---------------------------------------------------------------------------
-;;; Template Engine
-;;; ---------------------------------------------------------------------------
+;;; Template Engine:
 
 (defun org-grimoire--default-theme-dir ()
   "Return the path to the built-in default theme."
@@ -188,9 +186,7 @@ URL is used to fill the {{url}} placeholder; it defaults to an empty string."
             :content     content)
       theme-dir)))
 
-;;; ---------------------------------------------------------------------------
-;;; File Utilities
-;;; ---------------------------------------------------------------------------
+;;; File Utilities:
 
 (defun org-grimoire--copy-static (static-dir output-dir)
   "Copy all files from STATIC-DIR to OUTPUT-DIR recursively."
@@ -212,9 +208,7 @@ URL is used to fill the {{url}} placeholder; it defaults to an empty string."
     (when (file-exists-p theme-static)
       (org-grimoire--copy-static theme-static (expand-file-name "static" output-dir)))))
 
-;;; ---------------------------------------------------------------------------
-;;; Collect
-;;; ---------------------------------------------------------------------------
+;;; Collect:
 
 (defun org-grimoire--extract-keyword (ast keyword)
   "Return the value of KEYWORD from the Org AST."
@@ -331,9 +325,7 @@ directly in SOURCE-DIR with no type subdirectory are skipped."
           (string> (or (plist-get a :date) "")
                    (or (plist-get b :date) "")))))
 
-;;; ---------------------------------------------------------------------------
-;;; Render
-;;; ---------------------------------------------------------------------------
+;;; Render:
 
 (defun org-grimoire--org-to-html (filepath)
   "Return the HTML body string produced by exporting the Org file at FILEPATH."
@@ -415,9 +407,7 @@ Asset paths are resolved relative to SOURCE-FILE and mirrored in OUTPUT-FILE."
                                               (plist-get post :source)
                                               (error-message-string err)))))))
 
-;;; ---------------------------------------------------------------------------
-;;; Index and Pagination
-;;; ---------------------------------------------------------------------------
+;;; Index and Pagination:
 
 (defun org-grimoire--render-post-item (post theme-dir)
   "Return the HTML string for POST rendered as a list item using THEME-DIR."
@@ -509,9 +499,7 @@ POSTS is the list of posts to render on this page."
     (error (org-grimoire--log :warn (format "Failed to generate index: %s"
                                             (error-message-string err))))))
 
-;;; ---------------------------------------------------------------------------
-;;; Tags
-;;; ---------------------------------------------------------------------------
+;;; Tags:
 
 (defun org-grimoire--collect-tags (posts)
   "Return a hash table mapping each tag string to its list of posts from POSTS."
@@ -593,9 +581,7 @@ POSTS is the list of posts to render on this page."
     (error (org-grimoire--log :error (format "Failed to generate tags: %s"
                                              (error-message-string err))))))
 
-;;; ---------------------------------------------------------------------------
-;;; Feeds
-;;; ---------------------------------------------------------------------------
+;;; Feeds:
 
 (defun org-grimoire--parse-date (date-string)
   "Return an internal time value parsed from DATE-STRING (yyyy-mm-dd format)."
@@ -605,12 +591,12 @@ POSTS is the list of posts to render on this page."
 (defun org-grimoire--rss-date (date-string)
   "Return an RFC 822 date string derived from DATE-STRING (yyyy-mm-dd format)."
   (when-let ((time (org-grimoire--parse-date date-string)))
-    (format-time-string "%a, %d %b %Y %H:%M:%S +0000" time t)))
+    (format-time-string "%a, %d %b %Y %T +0000" time t)))
 
 (defun org-grimoire--atom-date (date-string)
   "Return an RFC 3339 date string derived from DATE-STRING (yyyy-mm-dd format)."
   (when-let ((time (org-grimoire--parse-date date-string)))
-    (format-time-string "%Y-%m-%dT%H:%M:%SZ" time t)))
+    (format-time-string "%FT%TZ" time t)))
 
 (defun org-grimoire--escape-xml (str)
   "Return STR with XML special characters escaped.
@@ -662,7 +648,7 @@ SITE-TITLE and SITE-DESCRIPTION supply the channel metadata."
    (format "  <description>%s</description>\n"
            (org-grimoire--escape-xml site-description))
    (format "  <lastBuildDate>%s</lastBuildDate>\n"
-           (format-time-string "%a, %d %b %Y %H:%M:%S +0000" nil t))
+           (format-time-string "%a, %d %b %Y %T +0000" nil t))
    (mapconcat (lambda (p) (org-grimoire--rss-item p base-url output-dir))
               posts "")
    "</channel>\n"
@@ -698,7 +684,7 @@ SITE-TITLE supplies the feed title."
              (string-trim-right base-url "/"))
      (format "  <id>%s/</id>\n" (string-trim-right base-url "/"))
      (format "  <updated>%s</updated>\n"
-             (format-time-string "%Y-%m-%dT%H:%M:%SZ" nil t))
+             (format-time-string "%FT%TZ" nil t))
      (when author (format "  <author><name>%s</name></author>\n"
                           (org-grimoire--escape-xml author)))
      (mapconcat (lambda (p) (org-grimoire--atom-entry p base-url output-dir))
@@ -747,9 +733,7 @@ SITE-TITLE supplies the feed title."
     (error (org-grimoire--log :error (format "Failed to generate sitemap: %s"
                                              (error-message-string err))))))
 
-;;; ---------------------------------------------------------------------------
-;;; Public API
-;;; ---------------------------------------------------------------------------
+;;; Public API:
 
 (defun org-grimoire--resolve-config (args)
   "Return a resolved configuration plist derived from ARGS.
@@ -846,7 +830,7 @@ Optional path overrides: :source, :output, :static."
          (type   (completing-read "Type: " types nil t))
          (title  (read-string "Title: "))
          (tags   (read-string "Tags (comma separated): "))
-         (date   (format-time-string "%Y-%m-%d"))
+         (date   (format-time-string "%F"))
          (slug   (replace-regexp-in-string "[^a-z0-9]" "-" (downcase title)))
          (dir    (expand-file-name type source))
          (file   (expand-file-name (concat slug ".org") dir)))
@@ -873,7 +857,7 @@ Optional path overrides: :source, :output, :static."
       (make-directory dir t))
         (write-region
         (concat "#+TITLE: My First Post\n"
-                "#+DATE: " (format-time-string "%Y-%m-%d") "\n"
+                "#+DATE: " (format-time-string "%F") "\n"
                 "#+TAGS: emacs\n"
                 "#+DRAFT: false\n\n"
                 "Hello, world!\n")
@@ -883,21 +867,16 @@ Optional path overrides: :source, :output, :static."
      nil (expand-file-name "about.org" pages))
         (message "Done! Add this to your Emacs config:\n\n%s"
                 (format
-                (concat "(org-grimoire-setup \"%s\"\n"
-                        "  :base-dir    \"%s\"\n"
-                        "  :base-url    \"%s\"\n"
-                        "  :site-title  \"%s\"\n"
-                        "  :description \"My site\")\n")
-                name base base-url name))))
+                 "(org-grimoire-setup \"%s\"\n  :base-dir    \"%s\"\n  :base-url    \"%s\"\n  :site-title  \"%s\"\n  :description \"My site\")\n"
+                 name base base-url name))))
 
-;;;###autoload
 ;;;###autoload
 (defun org-grimoire-serve (name)
   "Serve the built site for NAME using simple-httpd if available."
   (interactive
    (list (completing-read "Site:" (hash-table-keys org-grimoire--sites) nil t)))
   (if (not (require 'simple-httpd nil t))
-      (user-error "simple-httpd is not installed")
+      (user-error "Simple-httpd is not installed")
     (let* ((config (or (gethash name org-grimoire--sites)
                        (user-error "No site configured with name: %s" name)))
            (output (plist-get config :output)))
