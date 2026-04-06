@@ -1,6 +1,8 @@
 #+OPTIONS: toc:nil
 * org-grimoire — An Emacs-native Static Site Generator
 [[https://github.com/spiperac/org-grimoire/actions/workflows/melpazoid.yml][https://github.com/spiperac/org-grimoire/actions/workflows/melpazoid.yml/badge.svg]]
+[[https://stable.melpa.org/#/org-grimoire][file:https://stable.melpa.org/packages/org-grimoire-badge.svg]]
+[[https://melpa.org/#/org-grimoire][file:https://melpa.org/packages/org-grimoire-badge.svg]]
 
 #+ATTR_HTML: :width 128px
 [[file:docs/logo.png]]
@@ -11,6 +13,21 @@ configure everything in your Emacs config, build with a single command.
 Just Emacs, org-mode, and HTML templates!
 
 ** Installation
+
+*** MELPA
+
+#+BEGIN_SRC elisp
+M-x package-install RET org-grimoire RET
+#+END_SRC
+
+Or with use package:
+
+#+BEGIN_SRC elisp
+(use-package org-grimoire
+  :ensure t)
+#+END_SRC
+
+*** Manual
 
 Clone the repository and add it to your load path:
 
