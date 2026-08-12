@@ -3,7 +3,7 @@
 ;; Copyright (C) 2026 Strahinja Piperac <sp@spiperac.dev>
 ;;
 ;; Author: Strahinja Piperac <sp@spiperac.dev>
-;; Version: 0.1.0
+;; Version: 0.2.0
 ;; Package-Requires: ((emacs "30.2") (org "9.7.11"))
 ;; Keywords: files, hypermedia, outlines, text
 ;; URL: https://github.com/spiperac/org-grimoire
@@ -202,11 +202,17 @@ URL is used to fill the {{url}} placeholder; it defaults to an empty string."
                          (format "Copied %d static file(s) to %s." count output-dir)))))
 
 (defun org-grimoire--copy-theme-static (output-dir theme-dir)
-  "Copy static files from THEME-DIR into OUTPUT-DIR/static/ if present."
-  (let* ((theme        (or theme-dir (org-grimoire--default-theme-dir)))
-         (theme-static (expand-file-name "static" theme)))
-    (when (file-exists-p theme-static)
-      (org-grimoire--copy-static theme-static (expand-file-name "static" output-dir)))))
+  "Copy static files from THEME-DIR into OUTPUT-DIR/static/ if present.
+When THEME-DIR is nil or does not exist the built-in default theme is
+used instead, matching the fallback applied to templates.  A theme
+directory that exists but ships no static files contributes nothing, so
+that site-level static files are never overwritten by the default theme."
+  (let* ((theme  (if (and theme-dir (file-directory-p theme-dir))
+                     theme-dir
+                   (org-grimoire--default-theme-dir)))
+         (static (expand-file-name "static" theme)))
+    (when (file-exists-p static)
+      (org-grimoire--copy-static static (expand-file-name "static" output-dir)))))
 
 ;;; Collect:
 
@@ -482,31 +488,53 @@ POSTS is the list of posts to render on this page."
     (org-grimoire--log :info (format "Rendered index: %s" output))))
 
 (defun org-grimoire--generate-index (all-posts output-dir)
-  "Generate paginated index pages from listed posts in ALL-POSTS to OUTPUT-DIR."
+  "Generate paginated index pages from listed posts in ALL-POSTS to OUTPUT-DIR.
+Posts carrying any tag in :index-exclude-tags are omitted from the index
+only.  They are still rendered, and still appear on tag pages, in the
+feeds and in the sitemap."
   (condition-case err
       (let* ((per-page (or (org-grimoire--config-get :per-page) 10))
+             (excluded (ensure-list (org-grimoire--config-get :index-exclude-tags)))
+             (listed   (cl-remove-if-not
+                        (lambda (p) (plist-get p :listed)) all-posts))
              (posts    (org-grimoire--sort-posts-by-date
-                        (cl-remove-if-not
-                         (lambda (p) (plist-get p :listed)) all-posts)))
+                        (cl-remove-if
+                         (lambda (p)
+                           (cl-some (lambda (tag) (member-ignore-case tag excluded))
+                                    (plist-get p :tags)))
+                         listed)))
              (pages    (org-grimoire--paginate posts per-page))
              (total    (length pages)))
-        (if (null posts)
-            (org-grimoire--log :warn "No listed posts found.")
+        (cond
+         ((and (null posts) listed)
+          (org-grimoire--log :warn
+                             (format "All %d listed post(s) excluded by :index-exclude-tags; no index written."
+                                     (length listed))))
+         ((null posts)
+          (org-grimoire--log :warn "No listed posts found."))
+         (t
           (cl-loop for page-posts in pages
                    for i from 1
                    do (org-grimoire--write-index-page
-                       page-posts i total output-dir))))
+                       page-posts i total output-dir)))))
     (error (org-grimoire--log :warn (format "Failed to generate index: %s"
                                             (error-message-string err))))))
 
 ;;; Tags:
 
 (defun org-grimoire--collect-tags (posts)
-  "Return a hash table mapping each tag string to its list of posts from POSTS."
-  (let ((tags (make-hash-table :test 'equal)))
+  "Return a hash table mapping each tag string to its list of posts from POSTS.
+Tags differing only in case are treated as one tag, since they resolve to
+the same slug and would otherwise overwrite each other's page.  The first
+spelling encountered is kept for display."
+  (let ((tags  (make-hash-table :test 'equal))
+        (names (make-hash-table :test 'equal)))
     (dolist (post posts)
       (dolist (tag (plist-get post :tags))
-        (puthash tag (cons post (gethash tag tags '())) tags)))
+        (let* ((key  (downcase tag))
+               (name (or (gethash key names)
+                         (puthash key tag names))))
+          (puthash name (cons post (gethash name tags '())) tags))))
     tags))
 
 (defun org-grimoire--tag-to-slug (tag)
@@ -764,7 +792,8 @@ Resolve :theme relative to the themes/ subdirectory of :base-dir."
         (output     (plist-get config :output))
         (base-url   (plist-get config :base-url))
         (site-title (plist-get config :site-title))
-        (per-page   (or (plist-get config :per-page) 10)))
+        (per-page   (or (plist-get config :per-page) 10))
+        (exclude    (plist-get config :index-exclude-tags)))
     (unless (and source (file-directory-p source))
       (user-error "Invalid or missing :source directory"))
     (unless output
@@ -774,13 +803,18 @@ Resolve :theme relative to the themes/ subdirectory of :base-dir."
     (unless (and site-title (not (string-empty-p site-title)))
       (user-error "Missing or empty :site-title"))
     (unless (and (integerp per-page) (> per-page 0))
-      (user-error ":per-page must be a positive integer"))))
+      (user-error ":per-page must be a positive integer"))
+    (unless (or (null exclude)
+                (stringp exclude)
+                (and (listp exclude) (cl-every #'stringp exclude)))
+      (user-error ":index-exclude-tags must be a string or a list of strings"))))
 
 ;;;###autoload
 (defun org-grimoire-setup (name &rest args)
   "Register a site configuration NAME with ARGS.
 Required keys: :base-dir, :base-url, :site-title.
-Optional keys: :description, :author, :theme, :per-page, :reading-time.
+Optional keys: :description, :author, :theme, :per-page, :reading-time,
+:index-exclude-tags (a string or list of tag names to keep off the index).
 Optional path overrides: :source, :output, :static."
   (puthash name (org-grimoire--resolve-config args) org-grimoire--sites))
 
@@ -801,6 +835,10 @@ Optional path overrides: :source, :output, :static."
     (org-grimoire--log :info "Build started")
     (org-grimoire--log :info (format "Source: %s" source))
     (org-grimoire--log :info (format "Output: %s" output))
+    (when (and theme-dir (not (file-directory-p theme-dir)))
+      (org-grimoire--log :warn
+                         (format "Theme directory not found: %s (using built-in default)"
+                                 theme-dir)))
     (condition-case err
         (let ((posts (org-grimoire--collect source output)))
           (org-grimoire--log :info (format "Collected %d post(s)." (length posts)))
@@ -852,9 +890,15 @@ Optional path overrides: :source, :output, :static."
          (content (expand-file-name "content" base))
          (posts   (expand-file-name "post" content))
          (pages   (expand-file-name "page" content))
-         (static  (expand-file-name "static" base)))
-    (dolist (dir (list base content posts pages static))
+         (static  (expand-file-name "static" base))
+         (themes  (expand-file-name "themes" base))
+         (default (expand-file-name "default" themes)))
+    (dolist (dir (list base content posts pages static themes))
       (make-directory dir t))
+    ;; Give the user an editable copy of the built-in theme to start from.
+    (let ((builtin (org-grimoire--default-theme-dir)))
+      (when (and (file-directory-p builtin) (not (file-exists-p default)))
+        (copy-directory builtin default nil t t)))
         (write-region
         (concat "#+TITLE: My First Post\n"
                 "#+DATE: " (format-time-string "%F") "\n"
@@ -867,7 +911,7 @@ Optional path overrides: :source, :output, :static."
      nil (expand-file-name "about.org" pages))
         (message "Done! Add this to your Emacs config:\n\n%s"
                 (format
-                 "(org-grimoire-setup \"%s\"\n  :base-dir    \"%s\"\n  :base-url    \"%s\"\n  :site-title  \"%s\"\n  :description \"My site\")\n"
+                 "(org-grimoire-setup \"%s\"\n  :base-dir    \"%s\"\n  :base-url    \"%s\"\n  :site-title  \"%s\"\n  :description \"My site\"\n  :theme       \"default\")\n"
                  name base base-url name))))
 
 ;;;###autoload

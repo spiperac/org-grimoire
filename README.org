@@ -36,6 +36,12 @@ Clone the repository and add it to your load path:
 (require 'org-grimoire)
 #+end_src
 
+*** Optional dependencies
+
+=simple-httpd= is not required to build a site, but if it is installed
+=M-x org-grimoire-serve= will serve your built site at
+=http://localhost:8080= for a quick local preview.
+
 ** Configuration
 
 Add to your Emacs config:
@@ -64,16 +70,38 @@ You can override any of these individually by passing =:source=,
 
 All available setup keys:
 
-| Key            | Required | Description                                        |
-|----------------+----------+----------------------------------------------------|
-| =:base-dir=    | yes      | Root directory of your site                        |
-| =:base-url=    | yes      | Full URL including scheme (e.g. https://example.com) |
-| =:site-title=  | yes      | Global site name, used in feeds and navigation     |
-| =:description= | no       | Site description, used in feeds and meta tags      |
-| =:author=      | no       | Author name, used in Atom feed                     |
-| =:theme=       | no       | Theme name under =base-dir/themes/=                |
-| =:per-page=    | no       | Posts per index page, defaults to 10               |
-| =:reading-time=| no       | Set to =t= to enable reading time estimates        |
+| Key                   | Required | Description                                          |
+|-----------------------+----------+------------------------------------------------------|
+| =:base-dir=           | yes      | Root directory of your site                          |
+| =:base-url=           | yes      | Full URL including scheme (e.g. https://example.com) |
+| =:site-title=         | yes      | Global site name, used in feeds and navigation       |
+| =:description=        | no       | Site description, used in feeds and meta tags        |
+| =:author=             | no       | Author name, used in Atom feed                       |
+| =:theme=              | no       | Theme name under =base-dir/themes/=                  |
+| =:per-page=           | no       | Posts per index page, defaults to 10                 |
+| =:reading-time=       | no       | Set to =t= to enable reading time estimates          |
+| =:index-exclude-tags= | no       | Tag name(s) to keep off the index; string or list    |
+
+*** Excluding tags from the index
+
+Posts carrying any tag listed in =:index-exclude-tags= are left off the
+index and its pagination. They are still rendered, and still appear on
+tag pages, in the feeds and in the sitemap. This is useful when one
+category dominates your output and you would rather browse it at
+=/tags/name.html=:
+
+#+begin_src elisp
+(org-grimoire-setup "my-blog"
+  :base-dir           "~/blog"
+  :base-url           "https://yoursite.com"
+  :site-title         "My Blog"
+  :index-exclude-tags '("ctf"))
+#+end_src
+
+Matching is case-insensitive, and a bare string is accepted for a
+single tag: =:index-exclude-tags "ctf"=.
+
+For per-post control, use =#+LISTED: nil= instead.
 
 *** Multiple sites
 
@@ -175,6 +203,26 @@ Gets copied from =content/post/images/screenshot.png= to
 in the browser with no extra configuration.
 
 ** Templates
+
+*** Theme resolution
+
+=:theme= is expanded against your =:base-dir=, so =:theme "mytheme"=
+means =base-dir/themes/mytheme/=. Pass a full path to point somewhere
+else.
+
+Template lookup falls back per file: each template is looked for in your
+theme first, and anything missing is taken from the built-in default
+theme that ships with the package. A theme can therefore override just
+=post.html= and inherit everything else.
+
+Static files do not merge. Your theme's =static/= directory is copied
+as-is, so a theme that ships one is responsible for all of it. The
+default theme's static files are used only when the theme directory
+itself is missing, which is what makes a site with no theme of its own
+come out styled.
+
+=M-x org-grimoire-init= writes an editable copy of the default theme to
+=base-dir/themes/default/= to start from.
 
 *** Base template
 
