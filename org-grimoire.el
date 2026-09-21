@@ -46,9 +46,16 @@
 ;;    :date         "2026-01-15"
 ;;    :tags         ("emacs" "lisp")
 ;;    :slug         "my-post"
+;;    :description  "Summary used for the link preview."
+;;    :image        "./images/screenshot.png"
 ;;    :source       "/path/to/file.org"
 ;;    :output       "/path/to/output/my-post.html"
 ;;    :assets       ("/path/to/images/screenshot.png"))
+;;
+;; :description comes from #+DESCRIPTION:, falling back to the first
+;; paragraph of the post.  :image comes from #+IMAGE:, falling back to the
+;; first image the post links to.  Both feed the Open Graph tags that
+;; social sites and chat clients read when a link is shared.
 
 ;;; Code:
 
@@ -171,19 +178,48 @@ Process {{include}} directives first using THEME-DIR."
              result t t)))
     result))
 
-(defun org-grimoire--wrap-base (content title &optional url)
+(defun org-grimoire--plist-merge (defaults overrides)
+  "Return DEFAULTS with every key from OVERRIDES applied over it.
+Neither argument is modified.  Keys present only in OVERRIDES are added."
+  (let ((result (copy-sequence defaults)))
+    (cl-loop for (key value) on overrides by #'cddr do
+      (setq result (plist-put result key value)))
+    result))
+
+(defun org-grimoire--site-image ()
+  "Return the site-wide preview image from :og-image as an absolute URL.
+Return an empty string when the site sets no image.  A full URL is kept
+as it is; anything else is joined to the configured base URL."
+  (let ((image (org-grimoire--config-get :og-image))
+        (base  (string-trim-right
+                (or (org-grimoire--config-get :base-url) "") "/")))
+    (cond
+     ((null image) "")
+     ((string-match-p "\\`[a-z][a-z0-9+.-]*://" image) image)
+     (t (concat base "/" (string-remove-prefix "/" image))))))
+
+(defun org-grimoire--wrap-base (content title &optional url vars)
   "Return CONTENT wrapped in the base template, substituting TITLE.
-URL is used to fill the {{url}} placeholder; it defaults to an empty string."
+URL is used to fill the {{url}} placeholder; it defaults to an empty string.
+VARS is a plist of page-specific values applied over the site-wide
+defaults, letting a page supply its own description, preview image or
+Open Graph type.  The description is escaped because it is substituted
+into an HTML attribute."
   (let* ((theme-dir (org-grimoire--config-get :theme))
-         (base      (org-grimoire--load-template "base" theme-dir)))
+         (base      (org-grimoire--load-template "base" theme-dir))
+         (defaults  (list :title       title
+                          :site-title  (org-grimoire--config-get :site-title)
+                          :description (org-grimoire--config-get :description)
+                          :author      (org-grimoire--config-get :author)
+                          :base-url    (org-grimoire--config-get :base-url)
+                          :url         (or url "")
+                          :og-type     "website"
+                          :og-image    (org-grimoire--site-image)
+                          :content     content))
+         (merged    (org-grimoire--plist-merge defaults vars)))
     (org-grimoire--render-template base
-      (list :title       title
-            :site-title  (org-grimoire--config-get :site-title)
-            :description (org-grimoire--config-get :description)
-            :author      (org-grimoire--config-get :author)
-            :base-url    (org-grimoire--config-get :base-url)
-            :url         (or url "")
-            :content     content)
+      (plist-put merged :description
+                 (org-grimoire--escape-xml (plist-get merged :description)))
       theme-dir)))
 
 ;;; File Utilities:
@@ -255,6 +291,58 @@ Paths are resolved relative to SOURCE-FILE and filtered to those that exist."
                   (when (file-exists-p absolute)
                     absolute))))))))
 
+(defconst org-grimoire--image-extensions
+  '("png" "jpg" "jpeg" "gif" "webp" "svg" "avif")
+  "File extensions treated as images when choosing a preview image.")
+
+(defun org-grimoire--first-image-from-ast (ast)
+  "Return the path of the first image file link in AST, or nil.
+The path is returned exactly as written in the Org source, so it is
+still relative to the source file."
+  (org-element-map ast 'link
+    (lambda (el)
+      (when (string= (org-element-property :type el) "file")
+        (let* ((path      (org-element-property :path el))
+               (extension (downcase (or (file-name-extension path) ""))))
+          (when (member extension org-grimoire--image-extensions)
+            path))))
+    nil t))
+
+(defun org-grimoire--strip-org-markup (str)
+  "Return STR with Org syntax reduced to its visible text.
+A link with a description keeps the description, a bare link keeps its
+target, footnote references are removed, and emphasis markers are left
+untouched."
+  (replace-regexp-in-string
+   "\\[fn:[^]]*\\]" ""
+   (replace-regexp-in-string
+    "\\[\\[\\([^]]+\\)\\]\\]" "\\1"
+    (replace-regexp-in-string "\\[\\[[^]]+\\]\\[\\([^]]*\\)\\]\\]" "\\1" str))))
+
+(defun org-grimoire--summary-from-ast (ast &optional limit)
+  "Return a one-line summary taken from the first paragraph of AST.
+Org markup is reduced to plain text, whitespace is collapsed, and the
+result is truncated on a word boundary to LIMIT characters, defaulting
+to 160.  Return nil when AST contains no paragraph text."
+  (let ((paragraph (org-element-map ast 'paragraph
+                     (lambda (el)
+                       (let ((text (string-trim
+                                    (substring-no-properties
+                                     (org-element-interpret-data
+                                      (org-element-contents el))))))
+                         (unless (string-empty-p text) text)))
+                     nil t))
+        (limit     (or limit 160)))
+    (when paragraph
+      (let ((flat (string-trim
+                   (replace-regexp-in-string
+                    "[ \t\n\r]+" " "
+                    (org-grimoire--strip-org-markup paragraph)))))
+        (if (<= (length flat) limit)
+            flat
+          (let ((cut (or (cl-position ?\s flat :from-end t :end limit) limit)))
+            (concat (string-trim-right (substring flat 0 cut)) "...")))))))
+
 (defun org-grimoire--normalize-boolean (str &optional default)
   "Return the boolean interpretation of STR.
 Return DEFAULT when STR is nil.
@@ -293,7 +381,11 @@ SOURCE-DIR and OUTPUT-DIR are used to compute the output path and post type."
            (output   (expand-file-name
                       (concat (file-name-sans-extension relative) ".html")
                       output-dir))
-           (assets   (org-grimoire--collect-assets ast filepath)))
+           (assets   (org-grimoire--collect-assets ast filepath))
+           (summary  (or (org-grimoire--extract-keyword ast "DESCRIPTION")
+                         (org-grimoire--summary-from-ast ast)))
+           (image    (or (org-grimoire--extract-keyword ast "IMAGE")
+                         (org-grimoire--first-image-from-ast ast))))
       (list :title        title
             :date         date
             :type         type
@@ -301,6 +393,8 @@ SOURCE-DIR and OUTPUT-DIR are used to compute the output path and post type."
             :listed       listed
             :tags         tags
             :slug         slug
+            :description  summary
+            :image        image
             :source       filepath
             :reading-time (when (org-grimoire--config-get :reading-time)
                             (org-grimoire--reading-time-from-ast ast))
@@ -362,6 +456,21 @@ directly in SOURCE-DIR with no type subdirectory are skipped."
           (file-relative-name (plist-get post :output)
                               (org-grimoire--config-get :output))))
 
+(defun org-grimoire--absolute-url (path post)
+  "Return PATH as an absolute URL for POST, or nil when PATH is nil.
+A full URL is returned unchanged, a root-relative path is joined to the
+configured base URL, and anything else is resolved against the directory
+POST is written to, matching how its assets are copied."
+  (when path
+    (let ((base (string-trim-right
+                 (or (org-grimoire--config-get :base-url) "") "/")))
+      (cond
+       ((string-match-p "\\`[a-z][a-z0-9+.-]*://" path) path)
+       ((string-prefix-p "/" path) (concat base path))
+       (t (concat base
+                  (file-name-directory (org-grimoire--post-site-url post))
+                  (string-remove-prefix "./" path)))))))
+
 (defun org-grimoire--render-post (post)
   "Return the full HTML string for POST rendered with its type template."
   (let* ((theme-dir (org-grimoire--config-get :theme))
@@ -380,7 +489,13 @@ directly in SOURCE-DIR with no type subdirectory are skipped."
                             :reading-time (or (plist-get post :reading-time) "")
                             :slug         (plist-get post :slug))
                       theme-dir)))
-    (org-grimoire--wrap-base inner title url)))
+    (org-grimoire--wrap-base inner title url
+      (list :og-type     "article"
+            :description (or (plist-get post :description)
+                             (org-grimoire--config-get :description))
+            :og-image    (or (org-grimoire--absolute-url
+                              (plist-get post :image) post)
+                             (org-grimoire--site-image))))))
 
 (defun org-grimoire--copy-assets (assets source-file output-file)
   "Copy ASSETS into the directory of OUTPUT-FILE.
@@ -814,7 +929,8 @@ Resolve :theme relative to the themes/ subdirectory of :base-dir."
   "Register a site configuration NAME with ARGS.
 Required keys: :base-dir, :base-url, :site-title.
 Optional keys: :description, :author, :theme, :per-page, :reading-time,
-:index-exclude-tags (a string or list of tag names to keep off the index).
+:index-exclude-tags (a string or list of tag names to keep off the index),
+:og-image (the preview image used for pages that supply none of their own).
 Optional path overrides: :source, :output, :static."
   (puthash name (org-grimoire--resolve-config args) org-grimoire--sites))
 

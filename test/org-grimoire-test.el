@@ -231,5 +231,196 @@ Site-level static files must survive, since the theme contributes none."
     (should (file-exists-p
              (expand-file-name "themes/default/static/css/style.css" base)))))
 
+;;; Open Graph metadata
+
+(defun org-grimoire-test--make-meta-site (body)
+  "Create a fixture site whose single post has BODY after its keywords.
+Return the base directory."
+  (let* ((base (make-temp-file "org-grimoire-test-" t))
+         (post (expand-file-name "content/post" base)))
+    (make-directory post t)
+    (write-region (concat "#+TITLE: Solo\n#+DATE: 2026-01-01\n#+TAGS: emacs\n\n"
+                          body)
+                  nil (expand-file-name "solo.org" post))
+    base))
+
+(defun org-grimoire-test--meta (html property)
+  "Return the content of the meta tag named PROPERTY in HTML."
+  (when (string-match
+         (format "<meta[^>]*\\(?:property\\|name\\)=\"%s\"[^>]*content=\"\\([^\"]*\\)\""
+                 (regexp-quote property))
+         (or html ""))
+    (match-string 1 html)))
+
+(defun org-grimoire-test--solo (base)
+  "Return the rendered HTML of the solo post built under BASE."
+  (let ((out (org-grimoire-test--build base)))
+    (org-grimoire-test--slurp
+     (expand-file-name "post/solo.html" out))))
+
+(ert-deftest org-grimoire-test-description-keyword-wins ()
+  "#+DESCRIPTION: is preferred over the first paragraph."
+  (let* ((base (org-grimoire-test--make-meta-site
+                "#+DESCRIPTION: Chosen by hand.\n\nThe opening paragraph.\n"))
+         (html (org-grimoire-test--solo base)))
+    (should (equal "Chosen by hand."
+                   (org-grimoire-test--meta html "og:description")))))
+
+(ert-deftest org-grimoire-test-description-falls-back-to-first-paragraph ()
+  "Without the keyword the first paragraph becomes the description."
+  (let* ((base (org-grimoire-test--make-meta-site "The opening paragraph.\n"))
+         (html (org-grimoire-test--solo base)))
+    (should (equal "The opening paragraph."
+                   (org-grimoire-test--meta html "og:description")))))
+
+(ert-deftest org-grimoire-test-description-strips-org-links ()
+  "Link syntax in the first paragraph is reduced to its visible text."
+  (let* ((base (org-grimoire-test--make-meta-site
+                "Text with [[https://example.com][a link]] inside.\n"))
+         (html (org-grimoire-test--solo base)))
+    (should (equal "Text with a link inside."
+                   (org-grimoire-test--meta html "og:description")))))
+
+(ert-deftest org-grimoire-test-description-strips-footnotes ()
+  "A footnote reference is removed from the description."
+  (let* ((base (org-grimoire-test--make-meta-site
+                "I got mine on AliExpress[fn:1].\n\n[fn:1] A shop.\n"))
+         (html (org-grimoire-test--solo base)))
+    (should (equal "I got mine on AliExpress."
+                   (org-grimoire-test--meta html "og:description")))))
+
+(ert-deftest org-grimoire-test-description-is-escaped ()
+  "A quote in the description cannot break out of the attribute."
+  (let* ((base (org-grimoire-test--make-meta-site
+                "#+DESCRIPTION: He said \"hello\" & left.\n\nBody.\n"))
+         (html (org-grimoire-test--solo base)))
+    (should (equal "He said &quot;hello&quot; &amp; left."
+                   (org-grimoire-test--meta html "og:description")))))
+
+(ert-deftest org-grimoire-test-description-is-truncated ()
+  "A long first paragraph is cut on a word boundary."
+  (let* ((base (org-grimoire-test--make-meta-site
+                (concat (mapconcat #'identity
+                                   (make-list 60 "word") " ")
+                        ".\n")))
+         (html (org-grimoire-test--solo base))
+         (text (org-grimoire-test--meta html "og:description")))
+    (should (<= (length text) 163))
+    (should (string-suffix-p "..." text))
+    (should-not (string-match-p "wor\\.\\.\\." text))))
+
+(ert-deftest org-grimoire-test-image-keyword-wins ()
+  "#+IMAGE: is preferred over the first image in the body."
+  (let* ((base (org-grimoire-test--make-meta-site
+                "#+IMAGE: ./images/chosen.png\n\n[[./images/first.png]]\n"))
+         (html (org-grimoire-test--solo base)))
+    (should (equal "https://example.com/post/images/chosen.png"
+                   (org-grimoire-test--meta html "og:image")))))
+
+(ert-deftest org-grimoire-test-image-falls-back-to-first-in-post ()
+  "Without the keyword the first image in the post is used."
+  (let* ((base (org-grimoire-test--make-meta-site
+                "Intro.\n\n[[./images/first.png]]\n\n[[./images/second.png]]\n"))
+         (html (org-grimoire-test--solo base)))
+    (should (equal "https://example.com/post/images/first.png"
+                   (org-grimoire-test--meta html "og:image")))))
+
+(ert-deftest org-grimoire-test-image-ignores-non-image-links ()
+  "A link to a non-image file is not chosen as the preview image."
+  (let* ((base (org-grimoire-test--make-meta-site
+                "[[./notes.org]]\n\n[[./images/real.jpg]]\n"))
+         (html (org-grimoire-test--solo base)))
+    (should (equal "https://example.com/post/images/real.jpg"
+                   (org-grimoire-test--meta html "og:image")))))
+
+(ert-deftest org-grimoire-test-image-accepts-absolute-forms ()
+  "Root-relative and full URLs are passed through correctly."
+  (let* ((base (org-grimoire-test--make-meta-site
+                "#+IMAGE: /static/card.png\n\nBody.\n"))
+         (html (org-grimoire-test--solo base)))
+    (should (equal "https://example.com/static/card.png"
+                   (org-grimoire-test--meta html "og:image"))))
+  (let* ((base (org-grimoire-test--make-meta-site
+                "#+IMAGE: https://cdn.example.org/card.png\n\nBody.\n"))
+         (html (org-grimoire-test--solo base)))
+    (should (equal "https://cdn.example.org/card.png"
+                   (org-grimoire-test--meta html "og:image")))))
+
+(ert-deftest org-grimoire-test-post-without-image-has-empty-og-image ()
+  "With no site image configured, a post linking none leaves og:image empty."
+  (let* ((base (org-grimoire-test--make-meta-site "Just words.\n"))
+         (html (org-grimoire-test--solo base)))
+    (should (equal "" (org-grimoire-test--meta html "og:image")))))
+
+(ert-deftest org-grimoire-test-site-image-is-the-fallback ()
+  "Pages supplying no image of their own fall back to :og-image."
+  (let* ((base  (org-grimoire-test--make-meta-site "Just words.\n"))
+         (out   (org-grimoire-test--build base :og-image "/static/avatar.webp"))
+         (post  (org-grimoire-test--slurp
+                 (expand-file-name "post/solo.html" out)))
+         (index (org-grimoire-test--slurp
+                 (expand-file-name "index.html" out))))
+    (should (equal "https://example.com/static/avatar.webp"
+                   (org-grimoire-test--meta post "og:image")))
+    (should (equal "https://example.com/static/avatar.webp"
+                   (org-grimoire-test--meta index "og:image")))))
+
+(ert-deftest org-grimoire-test-post-image-beats-site-image ()
+  "A post with its own image is not overridden by :og-image."
+  (let* ((base (org-grimoire-test--make-meta-site "[[./images/own.png]]\n"))
+         (out  (org-grimoire-test--build base :og-image "/static/avatar.webp"))
+         (html (org-grimoire-test--slurp
+                (expand-file-name "post/solo.html" out))))
+    (should (equal "https://example.com/post/images/own.png"
+                   (org-grimoire-test--meta html "og:image")))))
+
+(ert-deftest org-grimoire-test-site-image-accepts-full-url ()
+  "A full URL in :og-image is used as it is."
+  (let* ((base (org-grimoire-test--make-meta-site "Just words.\n"))
+         (out  (org-grimoire-test--build
+                base :og-image "https://cdn.example.org/a.png"))
+         (html (org-grimoire-test--slurp
+                (expand-file-name "post/solo.html" out))))
+    (should (equal "https://cdn.example.org/a.png"
+                   (org-grimoire-test--meta html "og:image")))))
+
+(ert-deftest org-grimoire-test-og-type-differs-by-page ()
+  "Posts are articles; the index is a website."
+  (let* ((base  (org-grimoire-test--make-meta-site "Body.\n"))
+         (out   (org-grimoire-test--build base))
+         (post  (org-grimoire-test--slurp
+                 (expand-file-name "post/solo.html" out)))
+         (index (org-grimoire-test--slurp
+                 (expand-file-name "index.html" out))))
+    (should (equal "article" (org-grimoire-test--meta post "og:type")))
+    (should (equal "website" (org-grimoire-test--meta index "og:type")))))
+
+(ert-deftest org-grimoire-test-og-url-is-per-page ()
+  "Each post carries its own canonical URL."
+  (let* ((base (org-grimoire-test--make-meta-site "Body.\n"))
+         (html (org-grimoire-test--solo base)))
+    (should (equal "https://example.com/post/solo.html"
+                   (org-grimoire-test--meta html "og:url")))))
+
+(ert-deftest org-grimoire-test-wrap-base-without-vars-still-renders ()
+  "Callers passing three arguments keep working unchanged."
+  (let* ((base (org-grimoire-test--make-meta-site "Body.\n"))
+         (out  (org-grimoire-test--build base))
+         (tags (org-grimoire-test--slurp
+                (expand-file-name "tags/emacs.html" out))))
+    (should tags)
+    (should (equal "website" (org-grimoire-test--meta tags "og:type")))))
+
+(ert-deftest org-grimoire-test-plist-merge-does-not-mutate ()
+  "Merging leaves both inputs untouched and applies the overrides."
+  (let* ((defaults (list :a 1 :b 2))
+         (override (list :b 3 :c 4))
+         (merged   (org-grimoire--plist-merge defaults override)))
+    (should (equal 1 (plist-get merged :a)))
+    (should (equal 3 (plist-get merged :b)))
+    (should (equal 4 (plist-get merged :c)))
+    (should (equal 2 (plist-get defaults :b)))
+    (should (equal 3 (plist-get override :b)))))
+
 (provide 'org-grimoire-test)
 ;;; org-grimoire-test.el ends here
